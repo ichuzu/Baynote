@@ -8,10 +8,9 @@ lifecycleRuntimeKtx = "2.6.1"
 activityCompose = "1.8.0"
 kotlin = "2.1.0"
 composeBom = "2024.09.00"
-room = "2.6.1"
+room = "2.7.0"
 navigationCompose = "2.7.7"
 lifecycleViewmodelCompose = "2.7.0"
-ksp = "2.1.0-1.0.29"
 coroutines = "1.7.3"
 
 [libraries]
@@ -39,5 +38,3 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-
