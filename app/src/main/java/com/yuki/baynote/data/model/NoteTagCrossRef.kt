@@ -1,6 +1,7 @@
 package com.yuki.baynote.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 
 /**
  * Junction table linking notes to tags (many-to-many relationship).
@@ -12,7 +13,8 @@ import androidx.room.Entity
  */
 @Entity(
     tableName = "note_tag_cross_ref",
-    primaryKeys = ["noteId", "tagId"]
+    primaryKeys = ["noteId", "tagId"],
+    indices = [Index("tagId")]
 )
 data class NoteTagCrossRef(
     val noteId: Long,

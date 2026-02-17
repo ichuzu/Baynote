@@ -1,0 +1,133 @@
+package com.yuki.baynote.ui.screen.noteedit
+
+import android.app.Application
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.yuki.baynote.data.BaynoteDatabase
+import com.yuki.baynote.data.dao.NoteDao
+import com.yuki.baynote.data.model.Note
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+data class NoteEditUiState(
+    val id: Long = 0,
+    val title: String = "",
+    val content: String = "",
+    val folderId: Long? = null,
+    val isPinned: Boolean = false,
+    val isNew: Boolean = true,
+    val isSaved: Boolean = false,
+    val isDeleted: Boolean = false
+)
+
+class NoteEditViewModel(
+    private val noteDao: NoteDao,
+    private val noteId: Long,
+    initialFolderId: Long? = null
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(NoteEditUiState())
+    val uiState: StateFlow<NoteEditUiState> = _uiState.asStateFlow()
+
+    init {
+        if (noteId != 0L) {
+            viewModelScope.launch {
+                noteDao.getNoteById(noteId)?.let { note ->
+                    _uiState.value = NoteEditUiState(
+                        id = note.id,
+                        title = note.title,
+                        content = note.content,
+                        folderId = note.folderId,
+                        isPinned = note.isPinned,
+                        isNew = false
+                    )
+                }
+            }
+        } else {
+            // New note - set the initial folderId
+            _uiState.value = _uiState.value.copy(folderId = initialFolderId)
+        }
+    }
+
+    fun onTitleChange(title: String) {
+        _uiState.value = _uiState.value.copy(title = title)
+    }
+
+    fun onContentChange(content: String) {
+        _uiState.value = _uiState.value.copy(content = content)
+    }
+
+    fun togglePin() {
+        _uiState.value = _uiState.value.copy(isPinned = !_uiState.value.isPinned)
+    }
+
+    fun saveNote() {
+        val state = _uiState.value
+        if (state.title.isBlank() && state.content.isBlank()) {
+            _uiState.value = state.copy(isSaved = true)
+            return
+        }
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            if (state.isNew) {
+                noteDao.insertNote(
+                    Note(
+                        title = state.title,
+                        content = state.content,
+                        folderId = state.folderId,
+                        isPinned = state.isPinned,
+                        createdAt = now,
+                        updatedAt = now
+                    )
+                )
+            } else {
+                noteDao.updateNote(
+                    Note(
+                        id = state.id,
+                        title = state.title,
+                        content = state.content,
+                        folderId = state.folderId,
+                        isPinned = state.isPinned,
+                        createdAt = state.id, // preserved via Room
+                        updatedAt = now
+                    )
+                )
+            }
+            _uiState.value = _uiState.value.copy(isSaved = true)
+        }
+    }
+
+    fun deleteNote() {
+        val state = _uiState.value
+        if (state.isNew) {
+            _uiState.value = state.copy(isDeleted = true)
+            return
+        }
+        viewModelScope.launch {
+            noteDao.deleteNote(
+                Note(
+                    id = state.id,
+                    title = state.title,
+                    content = state.content,
+                    folderId = state.folderId,
+                    isPinned = state.isPinned
+                )
+            )
+            _uiState.value = _uiState.value.copy(isDeleted = true)
+        }
+    }
+
+    companion object {
+        fun factory(application: Application, noteId: Long, initialFolderId: Long? = null): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    val db = BaynoteDatabase.getInstance(application)
+                    return NoteEditViewModel(db.noteDao(), noteId, initialFolderId) as T
+                }
+            }
+    }
+}

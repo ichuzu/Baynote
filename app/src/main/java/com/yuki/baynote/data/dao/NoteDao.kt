@@ -30,6 +30,9 @@ interface NoteDao {
     @Delete
     suspend fun deleteNote(note: Note)
 
+    @Query("DELETE FROM notes WHERE folderId = :folderId")
+    suspend fun deleteNotesByFolder(folderId: Long)
+
     // ─── Single-note queries ─────────────────────────────────────────────────
 
     @Query("SELECT * FROM notes WHERE id = :id")
