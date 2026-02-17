@@ -1,12 +1,22 @@
 package com.yuki.baynote.ui.screen.noteedit
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.PushPin
@@ -25,14 +35,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import com.yuki.baynote.ui.screen.noteedit.markdown.ContentSegment
+import com.yuki.baynote.ui.screen.noteedit.markdown.ContentSegmentParser
+import com.yuki.baynote.ui.screen.noteedit.markdown.FormattingAction
+import com.yuki.baynote.ui.screen.noteedit.markdown.MarkdownVisualTransformation
+
+private data class IndexedSegment(val id: Int, val segment: ContentSegment)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +66,71 @@ fun NoteEditScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showDeleteDialog by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+
+    val segments = remember { mutableStateListOf<IndexedSegment>() }
+    val textFieldValues = remember { mutableStateMapOf<Int, TextFieldValue>() }
+    var nextSegmentId by remember { mutableIntStateOf(0) }
+    var lastSyncedContent by remember { mutableStateOf("") }
+    var focusedSegId by remember { mutableIntStateOf(-1) }
+
+    val undoManager = remember { UndoRedoManager() }
+
+    fun newId() = nextSegmentId++
+
+    fun loadContentIntoSegments(content: String) {
+        segments.clear()
+        textFieldValues.clear()
+        val parsed = ContentSegmentParser.parseSegments(content)
+        parsed.forEach { seg ->
+            val id = newId()
+            segments.add(IndexedSegment(id, seg))
+            if (seg is ContentSegment.Text) {
+                textFieldValues[id] = TextFieldValue(seg.text, TextRange(seg.text.length))
+            }
+        }
+        if (segments.lastOrNull()?.segment !is ContentSegment.Text) {
+            val id = newId()
+            segments.add(IndexedSegment(id, ContentSegment.Text("")))
+            textFieldValues[id] = TextFieldValue("")
+        }
+        lastSyncedContent = content
+    }
+
+    fun syncToViewModel() {
+        val content = ContentSegmentParser.segmentsToString(segments.map { it.segment })
+        lastSyncedContent = content
+        viewModel.onContentChange(content)
+    }
+
+    fun pushUndoState() {
+        val content = ContentSegmentParser.segmentsToString(segments.map { it.segment })
+        undoManager.pushState(content)
+    }
+
+    fun performUndo() {
+        pushUndoState() // save current state so redo can restore it
+        val restored = undoManager.undo() ?: return
+        loadContentIntoSegments(restored)
+        viewModel.onContentChange(restored)
+    }
+
+    fun performRedo() {
+        val restored = undoManager.redo() ?: return
+        loadContentIntoSegments(restored)
+        viewModel.onContentChange(restored)
+    }
+
+    LaunchedEffect(uiState.content) {
+        if (uiState.content != lastSyncedContent) {
+            loadContentIntoSegments(uiState.content)
+            undoManager.pushState(uiState.content)
+        }
+    }
+
+    val syntaxDimColor = MaterialTheme.colorScheme.outline
+    val markdownTransformation = remember(syntaxDimColor) {
+        MarkdownVisualTransformation(syntaxDimColor = syntaxDimColor)
+    }
 
     LaunchedEffect(uiState.isSaved, uiState.isDeleted) {
         if (uiState.isSaved || uiState.isDeleted) {
@@ -89,8 +177,10 @@ fun NoteEditScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
         ) {
+            // Title
             TextField(
                 value = uiState.title,
                 onValueChange = viewModel::onTitleChange,
@@ -100,17 +190,218 @@ fun NoteEditScreen(
                 colors = transparentTextFieldColors(),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
                     .focusRequester(focusRequester)
             )
-            TextField(
-                value = uiState.content,
-                onValueChange = viewModel::onContentChange,
-                placeholder = { Text("Start writing...") },
-                textStyle = MaterialTheme.typography.bodyLarge,
-                colors = transparentTextFieldColors(),
+
+            // Content segments
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                segments.forEachIndexed { index, indexedSeg ->
+                    key(indexedSeg.id) {
+                        when (val seg = indexedSeg.segment) {
+                            is ContentSegment.Text -> {
+                                val segId = indexedSeg.id
+                                var fieldValue by remember {
+                                    mutableStateOf(
+                                        textFieldValues[segId] ?: TextFieldValue(seg.text)
+                                    )
+                                }
+
+                                // Sync external changes into local fieldValue
+                                LaunchedEffect(seg.text) {
+                                    if (seg.text != fieldValue.text) {
+                                        fieldValue = TextFieldValue(seg.text, TextRange(seg.text.length))
+                                        textFieldValues[segId] = fieldValue
+                                    }
+                                }
+
+                                val isLast = index == segments.lastIndex
+
+                                TextField(
+                                    value = fieldValue,
+                                    onValueChange = { newVal ->
+                                        val oldText = fieldValue.text
+                                        val newText = newVal.text
+                                        // Push undo at word boundaries before applying change
+                                        val shouldPush = when {
+                                            newText.length > oldText.length + 1 -> true // paste
+                                            newText.length == oldText.length + 1 -> {
+                                                val pos = newVal.selection.start - 1
+                                                pos >= 0 && newText[pos].let { it == ' ' || it == '\n' }
+                                            }
+                                            else -> false
+                                        }
+                                        if (shouldPush) pushUndoState()
+
+                                        fieldValue = newVal
+                                        textFieldValues[segId] = newVal
+                                        val idx = segments.indexOfFirst { it.id == segId }
+                                        if (idx >= 0) {
+                                            segments[idx] = segments[idx].copy(
+                                                segment = ContentSegment.Text(newVal.text)
+                                            )
+                                            syncToViewModel()
+                                        }
+                                    },
+                                    placeholder = if (index == 0 && segments.all {
+                                            it.segment is ContentSegment.Text &&
+                                                (it.segment as ContentSegment.Text).text.isEmpty()
+                                        }) {
+                                        { Text("Start writing...") }
+                                    } else null,
+                                    textStyle = MaterialTheme.typography.bodyLarge,
+                                    visualTransformation = markdownTransformation,
+                                    colors = transparentTextFieldColors(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 24.dp)
+                                        .onFocusChanged { state ->
+                                            if (state.isFocused) focusedSegId = segId
+                                        }
+                                        .let {
+                                            if (isLast) it.defaultMinSize(minHeight = 200.dp)
+                                            else it
+                                        }
+                                )
+                            }
+
+                            is ContentSegment.Table -> {
+                                val segId = indexedSeg.id
+                                TableEditor(
+                                    rows = seg.rows,
+                                    onRowsChange = { newRows ->
+                                        val idx = segments.indexOfFirst { it.id == segId }
+                                        if (idx >= 0) {
+                                            segments[idx] = segments[idx].copy(
+                                                segment = ContentSegment.Table(newRows)
+                                            )
+                                            syncToViewModel()
+                                        }
+                                    },
+                                    onDelete = {
+                                        pushUndoState()
+                                        val idx = segments.indexOfFirst { it.id == segId }
+                                        if (idx >= 0) {
+                                            segments.removeAt(idx)
+                                            mergeAdjacentTextSegments(segments, textFieldValues)
+                                            if (segments.isEmpty()) {
+                                                val id = newId()
+                                                segments.add(IndexedSegment(id, ContentSegment.Text("")))
+                                                textFieldValues[id] = TextFieldValue("")
+                                            }
+                                            syncToViewModel()
+                                        }
+                                    },
+                                    onUndoCheckpoint = { pushUndoState() },
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Undo / Redo
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(
+                    onClick = { performUndo() },
+                    enabled = undoManager.canUndo,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = "Undo",
+                        modifier = Modifier.size(20.dp),
+                        tint = if (undoManager.canUndo) MaterialTheme.colorScheme.onSurfaceVariant
+                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                }
+                IconButton(
+                    onClick = { performRedo() },
+                    enabled = undoManager.canRedo,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Redo,
+                        contentDescription = "Redo",
+                        modifier = Modifier.size(20.dp),
+                        tint = if (undoManager.canRedo) MaterialTheme.colorScheme.onSurfaceVariant
+                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                }
+            }
+
+            // Formatting toolbar
+            FormattingToolbar(
+                onFormat = { option ->
+                    pushUndoState()
+                    when (option) {
+                        FormattingOption.Table -> {
+                            val focusIdx = segments.indexOfFirst { it.id == focusedSegId }
+                            val idx = if (focusIdx >= 0) focusIdx else segments.lastIndex
+
+                            if (idx >= 0 && segments[idx].segment is ContentSegment.Text) {
+                                val tfv = textFieldValues[segments[idx].id]
+                                val text = (segments[idx].segment as ContentSegment.Text).text
+                                val cursor = tfv?.selection?.start ?: text.length
+
+                                val before = text.substring(0, cursor)
+                                val after = text.substring(cursor)
+
+                                // Update current text segment to text-before-cursor
+                                val beforeId = segments[idx].id
+                                segments[idx] = segments[idx].copy(
+                                    segment = ContentSegment.Text(before)
+                                )
+                                textFieldValues[beforeId] = TextFieldValue(before, TextRange(before.length))
+
+                                // Insert table + text-after
+                                val tableId = newId()
+                                val afterId = newId()
+                                segments.add(idx + 1, IndexedSegment(tableId, ContentSegmentParser.createEmptyTable()))
+                                segments.add(idx + 2, IndexedSegment(afterId, ContentSegment.Text(after)))
+                                textFieldValues[afterId] = TextFieldValue(after)
+                            } else {
+                                // Append table at end
+                                val tableId = newId()
+                                val afterId = newId()
+                                segments.add(IndexedSegment(tableId, ContentSegmentParser.createEmptyTable()))
+                                segments.add(IndexedSegment(afterId, ContentSegment.Text("")))
+                                textFieldValues[afterId] = TextFieldValue("")
+                            }
+                            syncToViewModel()
+                        }
+
+                        else -> {
+                            val tfv = textFieldValues[focusedSegId] ?: return@FormattingToolbar
+                            val newTfv = when (option) {
+                                FormattingOption.H1 -> FormattingAction.toggleHeading(tfv, 1)
+                                FormattingOption.H2 -> FormattingAction.toggleHeading(tfv, 2)
+                                FormattingOption.H3 -> FormattingAction.toggleHeading(tfv, 3)
+                                FormattingOption.Bold -> FormattingAction.toggleBold(tfv)
+                                FormattingOption.Italic -> FormattingAction.toggleItalic(tfv)
+                                else -> tfv
+                            }
+                            textFieldValues[focusedSegId] = newTfv
+                            val idx = segments.indexOfFirst { it.id == focusedSegId }
+                            if (idx >= 0) {
+                                segments[idx] = segments[idx].copy(
+                                    segment = ContentSegment.Text(newTfv.text)
+                                )
+                                syncToViewModel()
+                            }
+                        }
+                    }
+                }
             )
         }
     }
@@ -139,6 +430,33 @@ fun NoteEditScreen(
     LaunchedEffect(uiState.isNew) {
         if (uiState.isNew) {
             focusRequester.requestFocus()
+        }
+    }
+}
+
+private fun mergeAdjacentTextSegments(
+    segments: MutableList<IndexedSegment>,
+    textFieldValues: MutableMap<Int, TextFieldValue>
+) {
+    var i = 0
+    while (i < segments.size - 1) {
+        val current = segments[i].segment
+        val next = segments[i + 1].segment
+        if (current is ContentSegment.Text && next is ContentSegment.Text) {
+            val merged = when {
+                current.text.isEmpty() && next.text.isEmpty() -> ""
+                current.text.isEmpty() -> next.text
+                next.text.isEmpty() -> current.text
+                else -> current.text + "\n" + next.text
+            }
+            val keepId = segments[i].id
+            val removeId = segments[i + 1].id
+            segments[i] = segments[i].copy(segment = ContentSegment.Text(merged))
+            textFieldValues[keepId] = TextFieldValue(merged, TextRange(merged.length))
+            textFieldValues.remove(removeId)
+            segments.removeAt(i + 1)
+        } else {
+            i++
         }
     }
 }

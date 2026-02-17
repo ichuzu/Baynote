@@ -74,7 +74,7 @@ private fun FolderOption(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 8.dp)
+            .padding(vertical = 14.dp, horizontal = 8.dp)
     ) {
         icon()
         Spacer(Modifier.width(16.dp))

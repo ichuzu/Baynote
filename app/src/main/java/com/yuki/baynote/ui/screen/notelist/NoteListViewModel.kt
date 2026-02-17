@@ -96,9 +96,7 @@ class NoteListViewModel(
 
     fun deleteFolder(folder: Folder) {
         viewModelScope.launch {
-            // Delete all notes in this folder first
             noteDao.deleteNotesByFolder(folder.id)
-            // Then delete the folder itself
             folderDao.deleteFolder(folder)
         }
     }

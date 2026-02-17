@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.yuki.baynote.data.model.Folder
@@ -102,7 +103,10 @@ fun NoteListScreen(
                 }
             },
             floatingActionButton = {
-                FloatingActionButton(onClick = onCreateNote) {
+                FloatingActionButton(
+                    onClick = onCreateNote,
+                    shape = CircleShape
+                ) {
                     Icon(Icons.Filled.Add, contentDescription = "New note")
                 }
             }
@@ -224,8 +228,8 @@ private fun NoteListContent(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (pinned.isNotEmpty()) {
             item {
@@ -233,7 +237,7 @@ private fun NoteListContent(
                     "Pinned",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
             items(pinned, key = { it.note.id }) { noteWithTags ->
@@ -256,7 +260,7 @@ private fun NoteListContent(
                     "Others",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
         }

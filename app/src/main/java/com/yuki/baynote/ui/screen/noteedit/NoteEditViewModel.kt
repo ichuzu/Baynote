@@ -20,7 +20,8 @@ data class NoteEditUiState(
     val isPinned: Boolean = false,
     val isNew: Boolean = true,
     val isSaved: Boolean = false,
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 class NoteEditViewModel(
@@ -42,12 +43,12 @@ class NoteEditViewModel(
                         content = note.content,
                         folderId = note.folderId,
                         isPinned = note.isPinned,
-                        isNew = false
+                        isNew = false,
+                        createdAt = note.createdAt
                     )
                 }
             }
         } else {
-            // New note - set the initial folderId
             _uiState.value = _uiState.value.copy(folderId = initialFolderId)
         }
     }
@@ -91,7 +92,7 @@ class NoteEditViewModel(
                         content = state.content,
                         folderId = state.folderId,
                         isPinned = state.isPinned,
-                        createdAt = state.id, // preserved via Room
+                        createdAt = state.createdAt,
                         updatedAt = now
                     )
                 )

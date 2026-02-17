@@ -21,7 +21,6 @@ enum class AppTheme(val label: String, val previewColor: Color) {
     ROSE("Rose", RosePrimary)
 }
 
-// ── Default (Purple) ──
 
 private val DefaultLightColorScheme = lightColorScheme(
     primary = Purple40,
@@ -36,17 +35,17 @@ private val DefaultLightColorScheme = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFFFD8E4),
     onTertiaryContainer = Color(0xFF31111D),
-    background = Color(0xFFFFFBFE),
+    background = Color(0xFFEEE8F2),
     onBackground = Color(0xFF1C1B1F),
-    surface = Color(0xFFFFFBFE),
+    surface = Color(0xFFEEE8F2),
     onSurface = Color(0xFF1C1B1F),
-    surfaceVariant = Color(0xFFE7E0EC),
+    surfaceVariant = Color(0xFFDDD6E4),
     onSurfaceVariant = Color(0xFF49454F),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF7F2FA),
-    surfaceContainer = Color(0xFFF3EDF7),
-    surfaceContainerHigh = Color(0xFFECE6F0),
-    surfaceContainerHighest = Color(0xFFE6E0E9),
+    surfaceContainerLow = Color(0xFFFAF8FC),
+    surfaceContainer = Color(0xFFEBE4EF),
+    surfaceContainerHigh = Color(0xFFE2DBE8),
+    surfaceContainerHighest = Color(0xFFD9D2E0),
     outline = Color(0xFF79747E),
     outlineVariant = Color(0xFFCAC4D0)
 )
@@ -79,7 +78,6 @@ private val DefaultDarkColorScheme = darkColorScheme(
     outlineVariant = Color(0xFF49454F)
 )
 
-// ── Ocean ──
 
 private val OceanLightColorScheme = lightColorScheme(
     primary = OceanPrimary,
@@ -94,17 +92,17 @@ private val OceanLightColorScheme = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFB2EBF2),
     onTertiaryContainer = Color(0xFF003E45),
-    background = Color(0xFFE8F1FA),
+    background = Color(0xFFD6E4F2),
     onBackground = Color(0xFF141C24),
-    surface = Color(0xFFEDF4FC),
+    surface = Color(0xFFD6E4F2),
     onSurface = Color(0xFF141C24),
-    surfaceVariant = Color(0xFFC9D9EC),
+    surfaceVariant = Color(0xFFBACDE2),
     onSurfaceVariant = Color(0xFF374555),
-    surfaceContainerLowest = Color(0xFFF2F7FD),
-    surfaceContainerLow = Color(0xFFE6EFF8),
-    surfaceContainer = Color(0xFFDDE8F4),
-    surfaceContainerHigh = Color(0xFFD2E0EF),
-    surfaceContainerHighest = Color(0xFFC6D7E9),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF5F8FC),
+    surfaceContainer = Color(0xFFD0DEF0),
+    surfaceContainerHigh = Color(0xFFC4D6EA),
+    surfaceContainerHighest = Color(0xFFB8CEE4),
     outline = Color(0xFF5A7289),
     outlineVariant = Color(0xFFADBFD1)
 )
@@ -137,7 +135,6 @@ private val OceanDarkColorScheme = darkColorScheme(
     outlineVariant = Color(0xFF374E64)
 )
 
-// ── Forest ──
 
 private val ForestLightColorScheme = lightColorScheme(
     primary = ForestPrimary,
@@ -152,17 +149,17 @@ private val ForestLightColorScheme = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFDCE8B4),
     onTertiaryContainer = Color(0xFF1A2E08),
-    background = Color(0xFFE8F2E8),
+    background = Color(0xFFD6E6D6),
     onBackground = Color(0xFF161D16),
-    surface = Color(0xFFECF5EC),
+    surface = Color(0xFFD6E6D6),
     onSurface = Color(0xFF161D16),
-    surfaceVariant = Color(0xFFCADBCA),
+    surfaceVariant = Color(0xFFBBCEBB),
     onSurfaceVariant = Color(0xFF3A4A3A),
-    surfaceContainerLowest = Color(0xFFF2F8F2),
-    surfaceContainerLow = Color(0xFFE5F0E5),
-    surfaceContainer = Color(0xFFDBE9DB),
-    surfaceContainerHigh = Color(0xFFCFE1CF),
-    surfaceContainerHighest = Color(0xFFC3D8C3),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF5FAF5),
+    surfaceContainer = Color(0xFFCEDFCE),
+    surfaceContainerHigh = Color(0xFFC2D6C2),
+    surfaceContainerHighest = Color(0xFFB6CCB6),
     outline = Color(0xFF5C725C),
     outlineVariant = Color(0xFFABC1AB)
 )
@@ -195,7 +192,6 @@ private val ForestDarkColorScheme = darkColorScheme(
     outlineVariant = Color(0xFF3A5A3C)
 )
 
-// ── Sunset ──
 
 private val SunsetLightColorScheme = lightColorScheme(
     primary = SunsetPrimary,
@@ -210,17 +206,17 @@ private val SunsetLightColorScheme = lightColorScheme(
     onTertiary = Color(0xFF3E2E00),
     tertiaryContainer = Color(0xFFFFF0C2),
     onTertiaryContainer = Color(0xFF3A2D00),
-    background = Color(0xFFFFF0E0),
+    background = Color(0xFFF0DFCC),
     onBackground = Color(0xFF241A10),
-    surface = Color(0xFFFFF4E8),
+    surface = Color(0xFFF0DFCC),
     onSurface = Color(0xFF241A10),
-    surfaceVariant = Color(0xFFF0D8C0),
+    surfaceVariant = Color(0xFFE2CCAF),
     onSurfaceVariant = Color(0xFF55422E),
-    surfaceContainerLowest = Color(0xFFFFF8F0),
-    surfaceContainerLow = Color(0xFFFCEEDD),
-    surfaceContainer = Color(0xFFF5E4D0),
-    surfaceContainerHigh = Color(0xFFEED9C2),
-    surfaceContainerHighest = Color(0xFFE6CEB5),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFCF6EF),
+    surfaceContainer = Color(0xFFE8D8C4),
+    surfaceContainerHigh = Color(0xFFE0CCB5),
+    surfaceContainerHighest = Color(0xFFD8C2A8),
     outline = Color(0xFF8C7560),
     outlineVariant = Color(0xFFD4B898)
 )
@@ -253,7 +249,6 @@ private val SunsetDarkColorScheme = darkColorScheme(
     outlineVariant = Color(0xFF544434)
 )
 
-// ── Monochrome ──
 
 private val MonoLightColorScheme = lightColorScheme(
     primary = MonoPrimary,
@@ -268,17 +263,17 @@ private val MonoLightColorScheme = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFE0E0E0),
     onTertiaryContainer = Color(0xFF2A2A2A),
-    background = Color(0xFFF0F0F0),
+    background = Color(0xFFE0E0E0),
     onBackground = Color(0xFF1A1A1A),
-    surface = Color(0xFFF4F4F4),
+    surface = Color(0xFFE0E0E0),
     onSurface = Color(0xFF1A1A1A),
-    surfaceVariant = Color(0xFFDCDCDC),
+    surfaceVariant = Color(0xFFCECECE),
     onSurfaceVariant = Color(0xFF3A3A3A),
-    surfaceContainerLowest = Color(0xFFF8F8F8),
-    surfaceContainerLow = Color(0xFFEEEEEE),
-    surfaceContainer = Color(0xFFE4E4E4),
-    surfaceContainerHigh = Color(0xFFDADADA),
-    surfaceContainerHighest = Color(0xFFD0D0D0),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF8F8F8),
+    surfaceContainer = Color(0xFFD6D6D6),
+    surfaceContainerHigh = Color(0xFFCCCCCC),
+    surfaceContainerHighest = Color(0xFFC2C2C2),
     outline = Color(0xFF6E6E6E),
     outlineVariant = Color(0xFFB0B0B0)
 )
@@ -311,7 +306,6 @@ private val MonoDarkColorScheme = darkColorScheme(
     outlineVariant = Color(0xFF444444)
 )
 
-// ── Rose ──
 
 private val RoseLightColorScheme = lightColorScheme(
     primary = RosePrimary,
@@ -326,17 +320,17 @@ private val RoseLightColorScheme = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFFFDAD6),
     onTertiaryContainer = Color(0xFF410002),
-    background = Color(0xFFFCE8EE),
+    background = Color(0xFFEED6DE),
     onBackground = Color(0xFF241418),
-    surface = Color(0xFFFDEDF2),
+    surface = Color(0xFFEED6DE),
     onSurface = Color(0xFF241418),
-    surfaceVariant = Color(0xFFF0CCD6),
+    surfaceVariant = Color(0xFFE2BBCA),
     onSurfaceVariant = Color(0xFF553842),
-    surfaceContainerLowest = Color(0xFFFFF5F7),
-    surfaceContainerLow = Color(0xFFF8E4EA),
-    surfaceContainer = Color(0xFFF2D8E0),
-    surfaceContainerHigh = Color(0xFFEACCD6),
-    surfaceContainerHighest = Color(0xFFE2C0CC),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFCF2F5),
+    surfaceContainer = Color(0xFFE6CCD6),
+    surfaceContainerHigh = Color(0xFFDEC0CC),
+    surfaceContainerHighest = Color(0xFFD6B4C2),
     outline = Color(0xFF8E6B76),
     outlineVariant = Color(0xFFD4AEBC)
 )
@@ -369,7 +363,6 @@ private val RoseDarkColorScheme = darkColorScheme(
     outlineVariant = Color(0xFF543840)
 )
 
-// ── Lookup ──
 
 fun colorSchemeFor(theme: AppTheme, dark: Boolean): ColorScheme = when (theme) {
     AppTheme.DEFAULT    -> if (dark) DefaultDarkColorScheme else DefaultLightColorScheme
@@ -398,6 +391,7 @@ fun BaynoteTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = Shapes,
         content = content
     )
 }

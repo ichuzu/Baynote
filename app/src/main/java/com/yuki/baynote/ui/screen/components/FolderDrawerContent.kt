@@ -51,11 +51,11 @@ fun FolderDrawerContent(
     var folderToDelete by remember { mutableStateOf<Folder?>(null) }
 
     ModalDrawerSheet {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
         Text(
             "Baynote",
             style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp)
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -104,7 +104,6 @@ fun FolderDrawerContent(
 
         Spacer(Modifier.weight(1f))
 
-        // Theme picker
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         Text(
             "Theme",
@@ -113,19 +112,19 @@ fun FolderDrawerContent(
         )
         Row(
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AppTheme.entries.forEach { theme ->
                 val isSelected = theme == currentTheme
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .background(theme.previewColor)
                         .then(
                             if (isSelected) Modifier.border(
-                                width = 3.dp,
+                                width = 2.5.dp,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 shape = CircleShape
                             ) else Modifier
