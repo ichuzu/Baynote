@@ -17,3 +17,5 @@ keystore.jks
 keystore.properties
 .idea/
 .idea/
+keystore.properties
+*.jks
