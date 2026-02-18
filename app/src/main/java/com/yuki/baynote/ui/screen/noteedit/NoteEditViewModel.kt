@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.yuki.baynote.data.BaynoteDatabase
 import com.yuki.baynote.data.dao.NoteDao
 import com.yuki.baynote.data.model.Note
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +35,8 @@ class NoteEditViewModel(
     private val _uiState = MutableStateFlow(NoteEditUiState())
     val uiState: StateFlow<NoteEditUiState> = _uiState.asStateFlow()
 
+    private var autoSaveJob: Job? = null
+
     init {
         if (noteId != 0L) {
             viewModelScope.launch {
@@ -55,10 +59,51 @@ class NoteEditViewModel(
 
     fun onTitleChange(title: String) {
         _uiState.value = _uiState.value.copy(title = title)
+        scheduleAutoSave()
     }
 
     fun onContentChange(content: String) {
         _uiState.value = _uiState.value.copy(content = content)
+        scheduleAutoSave()
+    }
+
+    private fun scheduleAutoSave() {
+        autoSaveJob?.cancel()
+        autoSaveJob = viewModelScope.launch {
+            delay(1000)
+            persistToDatabase()
+        }
+    }
+
+    private suspend fun persistToDatabase() {
+        val state = _uiState.value
+        if (state.title.isBlank() && state.content.isBlank()) return
+        val now = System.currentTimeMillis()
+        if (state.isNew) {
+            val id = noteDao.insertNote(
+                Note(
+                    title = state.title,
+                    content = state.content,
+                    folderId = state.folderId,
+                    isPinned = state.isPinned,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+            _uiState.value = _uiState.value.copy(id = id, isNew = false, createdAt = now)
+        } else {
+            noteDao.updateNote(
+                Note(
+                    id = state.id,
+                    title = state.title,
+                    content = state.content,
+                    folderId = state.folderId,
+                    isPinned = state.isPinned,
+                    createdAt = state.createdAt,
+                    updatedAt = now
+                )
+            )
+        }
     }
 
     fun togglePin() {
@@ -66,37 +111,14 @@ class NoteEditViewModel(
     }
 
     fun saveNote() {
+        autoSaveJob?.cancel()
         val state = _uiState.value
         if (state.title.isBlank() && state.content.isBlank()) {
             _uiState.value = state.copy(isSaved = true)
             return
         }
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            if (state.isNew) {
-                noteDao.insertNote(
-                    Note(
-                        title = state.title,
-                        content = state.content,
-                        folderId = state.folderId,
-                        isPinned = state.isPinned,
-                        createdAt = now,
-                        updatedAt = now
-                    )
-                )
-            } else {
-                noteDao.updateNote(
-                    Note(
-                        id = state.id,
-                        title = state.title,
-                        content = state.content,
-                        folderId = state.folderId,
-                        isPinned = state.isPinned,
-                        createdAt = state.createdAt,
-                        updatedAt = now
-                    )
-                )
-            }
+            persistToDatabase()
             _uiState.value = _uiState.value.copy(isSaved = true)
         }
     }

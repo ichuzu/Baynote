@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -37,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -44,6 +47,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 
@@ -57,6 +61,7 @@ fun TableEditor(
 ) {
     val borderColor = MaterialTheme.colorScheme.outlineVariant
     val colCount = rows.maxOfOrNull { it.size } ?: 2
+    var focusCellRequest by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     fun updateCell(rowIndex: Int, colIndex: Int, value: String) {
         val newRows = rows.map { it.toMutableList() }.toMutableList()
@@ -106,6 +111,7 @@ fun TableEditor(
                                 }
                                 var enterCount by remember { mutableIntStateOf(0) }
                                 var backspaceOnEmptyCount by remember { mutableIntStateOf(0) }
+                                val cellFocusRequester = remember { FocusRequester() }
 
                                 // Sync parent → local when cell value changes externally
                                 LaunchedEffect(cellValue) {
@@ -114,8 +120,19 @@ fun TableEditor(
                                     }
                                 }
 
+                                // Request focus when this cell is targeted
+                                LaunchedEffect(focusCellRequest) {
+                                    if (focusCellRequest == Pair(rowIndex, colIndex)) {
+                                        focusCellRequest = null
+                                        cellFocusRequester.requestFocus()
+                                    }
+                                }
+
                                 BasicTextField(
                                     value = cellTfv,
+                                    keyboardOptions = KeyboardOptions(
+                                        capitalization = KeyboardCapitalization.Sentences
+                                    ),
                                     onValueChange = { newTfv ->
                                         if ('\n' in newTfv.text) {
                                             val cleaned = newTfv.text.replace("\n", "")
@@ -125,6 +142,7 @@ fun TableEditor(
                                                 onUndoCheckpoint()
                                                 val newRows = rows.toMutableList()
                                                 newRows.add(rowIndex + 1, List(colCount) { "" })
+                                                focusCellRequest = Pair(rowIndex + 1, 0)
                                                 onRowsChange(newRows)
                                                 enterCount = 0
                                             }
@@ -160,6 +178,7 @@ fun TableEditor(
                                     modifier = Modifier
                                         .weight(1f)
                                         .padding(12.dp)
+                                        .focusRequester(cellFocusRequester)
                                         .onPreviewKeyEvent { event ->
                                             if (event.key == Key.Backspace &&
                                                 event.type == KeyEventType.KeyDown &&
@@ -208,6 +227,7 @@ fun TableEditor(
             TextButton(
                 onClick = {
                     onUndoCheckpoint()
+                    focusCellRequest = Pair(rows.size, 0)
                     onRowsChange(rows + listOf(List(colCount) { "" }))
                 },
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)

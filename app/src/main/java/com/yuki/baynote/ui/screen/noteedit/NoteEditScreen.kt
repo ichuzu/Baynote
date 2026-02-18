@@ -2,6 +2,7 @@ package com.yuki.baynote.ui.screen.noteedit
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -31,6 +33,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,6 +51,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -70,7 +76,7 @@ fun NoteEditScreen(
     val segments = remember { mutableStateListOf<IndexedSegment>() }
     val textFieldValues = remember { mutableStateMapOf<Int, TextFieldValue>() }
     var nextSegmentId by remember { mutableIntStateOf(0) }
-    var lastSyncedContent by remember { mutableStateOf("") }
+    var lastSyncedContent by remember { mutableStateOf<String?>(null) }
     var focusedSegId by remember { mutableIntStateOf(-1) }
 
     val undoManager = remember { UndoRedoManager() }
@@ -127,10 +133,8 @@ fun NoteEditScreen(
         }
     }
 
-    val syntaxDimColor = MaterialTheme.colorScheme.outline
-    val markdownTransformation = remember(syntaxDimColor) {
-        MarkdownVisualTransformation(syntaxDimColor = syntaxDimColor)
-    }
+    val markdownTransformation = remember { MarkdownVisualTransformation() }
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
 
     LaunchedEffect(uiState.isSaved, uiState.isDeleted) {
         if (uiState.isSaved || uiState.isDeleted) {
@@ -143,10 +147,37 @@ fun NoteEditScreen(
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { },
+                title = {
+                    BasicTextField(
+                        value = uiState.title,
+                        onValueChange = viewModel::onTitleChange,
+                        textStyle = MaterialTheme.typography.titleLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        singleLine = true,
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
+                        decorationBox = { innerTextField ->
+                            Box {
+                                if (uiState.title.isEmpty()) {
+                                    Text(
+                                        "Title",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                },
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = { viewModel.saveNote() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Save and go back")
@@ -180,20 +211,6 @@ fun NoteEditScreen(
                 .consumeWindowInsets(innerPadding)
                 .imePadding()
         ) {
-            // Title
-            TextField(
-                value = uiState.title,
-                onValueChange = viewModel::onTitleChange,
-                placeholder = { Text("Title", style = MaterialTheme.typography.headlineSmall) },
-                textStyle = MaterialTheme.typography.headlineSmall,
-                singleLine = true,
-                colors = transparentTextFieldColors(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .focusRequester(focusRequester)
-            )
-
             // Content segments
             Column(
                 modifier = Modifier

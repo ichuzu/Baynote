@@ -55,28 +55,59 @@ object FormattingAction {
         val sel = value.selection
         val dLen = delimiter.length
 
+        // Resolve the range to operate on
+        val selStart: Int
+        val selEnd: Int
+        val autoDetected: Boolean
+
         if (sel.collapsed) {
-            // No selection — insert empty delimiters with cursor between
-            val newText = text.substring(0, sel.start) + delimiter + delimiter + text.substring(sel.start)
-            return TextFieldValue(newText, TextRange(sel.start + dLen))
+            // No selection — expand to the non-whitespace word around the cursor
+            val cursor = sel.start
+            var ws = cursor
+            var we = cursor
+            while (ws > 0 && !text[ws - 1].isWhitespace()) ws--
+            while (we < text.length && !text[we].isWhitespace()) we++
+            selStart = ws
+            selEnd = we
+            autoDetected = true
+        } else {
+            selStart = sel.min
+            selEnd = sel.max
+            autoDetected = false
         }
 
-        val selStart = sel.min
-        val selEnd = sel.max
+        // Cursor was on whitespace — fall back to inserting empty markers with cursor inside
+        if (selStart == selEnd) {
+            val newText = text.substring(0, selStart) + delimiter + delimiter + text.substring(selStart)
+            return TextFieldValue(newText, TextRange(selStart + dLen))
+        }
+
         val selected = text.substring(selStart, selEnd)
 
-        // Check if already wrapped
+        // The auto-detected word itself starts/ends with the delimiter (already wrapped) → unwrap
+        if (selected.startsWith(delimiter) && selected.endsWith(delimiter) && selected.length > dLen * 2) {
+            val inner = selected.substring(dLen, selected.length - dLen)
+            val newText = text.substring(0, selStart) + inner + text.substring(selEnd)
+            return TextFieldValue(newText, TextRange(selStart, selStart + inner.length))
+        }
+
+        // Check if delimiters are immediately outside the selection → unwrap
         val beforeHas = selStart >= dLen && text.substring(selStart - dLen, selStart) == delimiter
         val afterHas = selEnd + dLen <= text.length && text.substring(selEnd, selEnd + dLen) == delimiter
 
         return if (beforeHas && afterHas) {
-            // Unwrap
             val newText = text.substring(0, selStart - dLen) + selected + text.substring(selEnd + dLen)
             TextFieldValue(newText, TextRange(selStart - dLen, selEnd - dLen))
         } else {
-            // Wrap
             val newText = text.substring(0, selStart) + delimiter + selected + delimiter + text.substring(selEnd)
-            TextFieldValue(newText, TextRange(selStart + dLen, selEnd + dLen))
+            val newSel = if (autoDetected) {
+                // Cursor lands after the closing delimiter — Enter creates a fresh plain line
+                TextRange(selEnd + dLen * 2)
+            } else {
+                // Keep selection on the wrapped content
+                TextRange(selStart + dLen, selEnd + dLen)
+            }
+            TextFieldValue(newText, newSel)
         }
     }
 

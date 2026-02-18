@@ -7,7 +7,7 @@ sealed class ContentSegment {
 
 object ContentSegmentParser {
 
-    private val separatorRegex = Regex("^\\|[\\s\\-:]+(?:\\|[\\s\\-:]+)*\\|\\s*$")
+    private val separatorRegex = Regex("^\\|\\s*:?-+:?\\s*(?:\\|\\s*:?-+:?\\s*)*\\|\\s*$")
 
     fun parseSegments(content: String): List<ContentSegment> {
         if (content.isEmpty()) return listOf(ContentSegment.Text(""))
