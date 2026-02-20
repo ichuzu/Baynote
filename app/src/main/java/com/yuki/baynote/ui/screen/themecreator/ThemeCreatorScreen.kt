@@ -68,13 +68,19 @@ fun ThemeCreatorScreen(
     var primary    by remember { mutableStateOf(initialColors?.primary    ?: Color(0xFF6750A4)) }
     var background by remember { mutableStateOf(initialColors?.background ?: Color(0xFF1C1B1F)) }
     var surface    by remember { mutableStateOf(initialColors?.surface    ?: Color(0xFF2B2930)) }
+    // null = auto (derived from background luminance); user can override
+    var textColor  by remember {
+        mutableStateOf(initialColors?.textColor
+            ?: if (background.luminance() > 0.179f) Color(0xFF1A1A1A) else Color(0xFFF0F0F0))
+    }
+    var useCustomTextColor by rememberSaveable { mutableStateOf(initialColors?.textColor != null) }
 
     var pickerTarget  by remember { mutableStateOf<String?>(null) }
     var showImport    by remember { mutableStateOf(false) }
     var showExport    by remember { mutableStateOf(false) }
     var importError   by remember { mutableStateOf<String?>(null) }
 
-    val exportCode = buildExportCode(name, primary, background, surface)
+    val exportCode = buildExportCode(name, primary, background, surface, if (useCustomTextColor) textColor else null)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -93,7 +99,8 @@ fun ThemeCreatorScreen(
                                 name = name.ifBlank { "Custom" },
                                 primary = primary,
                                 background = background,
-                                surface = surface
+                                surface = surface,
+                                textColor = if (useCustomTextColor) textColor else null
                             ))
                         }
                     ) {
@@ -126,7 +133,12 @@ fun ThemeCreatorScreen(
             // ── Live Preview ─────────────────────────────────────────────
             Text("Preview", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(8.dp))
-            ThemePreview(primary = primary, background = background, surface = surface)
+            ThemePreview(
+                primary = primary,
+                background = background,
+                surface = surface,
+                textColor = if (useCustomTextColor) textColor else null
+            )
 
             Spacer(Modifier.height(24.dp))
             HorizontalDivider()
@@ -141,6 +153,18 @@ fun ThemeCreatorScreen(
             ColorRow(label = "Background",       color = background, onClick = { pickerTarget = "background" })
             Spacer(Modifier.height(10.dp))
             ColorRow(label = "Card Surface",     color = surface,    onClick = { pickerTarget = "surface" })
+            Spacer(Modifier.height(10.dp))
+            ColorRow(
+                label = "Text Color${if (!useCustomTextColor) " (auto)" else ""}",
+                color = textColor,
+                onClick = { useCustomTextColor = true; pickerTarget = "textColor" },
+                onReset = if (useCustomTextColor) {
+                    {
+                        useCustomTextColor = false
+                        textColor = if (background.luminance() > 0.179f) Color(0xFF1A1A1A) else Color(0xFFF0F0F0)
+                    }
+                } else null
+            )
 
             Spacer(Modifier.height(24.dp))
             HorizontalDivider()
@@ -167,6 +191,7 @@ fun ThemeCreatorScreen(
         "primary"    -> ColorPickerDialog(primary,    { primary = it })    { pickerTarget = null }
         "background" -> ColorPickerDialog(background, { background = it }) { pickerTarget = null }
         "surface"    -> ColorPickerDialog(surface,    { surface = it })    { pickerTarget = null }
+        "textColor"  -> ColorPickerDialog(textColor,  { textColor = it })  { pickerTarget = null }
     }
 
     // Export dialog
@@ -251,6 +276,12 @@ fun ThemeCreatorScreen(
                         primary = result.primary
                         background = result.background
                         surface = result.surface
+                        if (result.textColor != null) {
+                            textColor = result.textColor
+                            useCustomTextColor = true
+                        } else {
+                            useCustomTextColor = false
+                        }
                         showImport = false
                     } else {
                         importError = "Invalid code. Expected: BAYNOTE-Name-RRGGBB-RRGGBB-RRGGBB"
@@ -265,8 +296,9 @@ fun ThemeCreatorScreen(
 }
 
 @Composable
-private fun ThemePreview(primary: Color, background: Color, surface: Color) {
+private fun ThemePreview(primary: Color, background: Color, surface: Color, textColor: Color? = null) {
     fun contrast(c: Color) = if (c.luminance() > 0.179f) Color(0xFF1A1A1A) else Color(0xFFF0F0F0)
+    val bgText = textColor ?: contrast(background)
 
     Box(
         modifier = Modifier
@@ -286,13 +318,13 @@ private fun ThemePreview(primary: Color, background: Color, surface: Color) {
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
-                        .background(contrast(background).copy(alpha = 0.15f)),
+                        .background(bgText.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("←", color = contrast(background), fontSize = 12.sp)
+                    Text("←", color = bgText, fontSize = 12.sp)
                 }
                 Spacer(Modifier.width(10.dp))
-                Text("My Note", color = contrast(background), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("My Note", color = bgText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(Modifier.height(12.dp))
@@ -339,7 +371,7 @@ private fun ThemePreview(primary: Color, background: Color, surface: Color) {
 }
 
 @Composable
-private fun ColorRow(label: String, color: Color, onClick: () -> Unit) {
+private fun ColorRow(label: String, color: Color, onClick: () -> Unit, onReset: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -350,8 +382,16 @@ private fun ColorRow(label: String, color: Color, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (onReset != null) {
+                androidx.compose.material3.TextButton(
+                    onClick = onReset,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text("Auto", style = MaterialTheme.typography.labelSmall)
+                }
+            }
             Text(
                 "#${String.format("%06X", color.toArgb() and 0xFFFFFF)}",
                 style = MaterialTheme.typography.bodySmall,
@@ -368,23 +408,30 @@ private fun ColorRow(label: String, color: Color, onClick: () -> Unit) {
     }
 }
 
-private fun buildExportCode(name: String, primary: Color, background: Color, surface: Color): String {
+private fun buildExportCode(name: String, primary: Color, background: Color, surface: Color, textColor: Color?): String {
     val n = name.ifBlank { "Custom" }.replace(" ", "+")
     val p = String.format("%06X", primary.toArgb() and 0xFFFFFF)
     val b = String.format("%06X", background.toArgb() and 0xFFFFFF)
     val s = String.format("%06X", surface.toArgb() and 0xFFFFFF)
-    return "BAYNOTE-$n-$p-$b-$s"
+    return if (textColor != null) {
+        val t = String.format("%06X", textColor.toArgb() and 0xFFFFFF)
+        "BAYNOTE-$n-$p-$b-$s-$t"
+    } else {
+        "BAYNOTE-$n-$p-$b-$s"
+    }
 }
 
 private fun parseImportCode(code: String): CustomThemeColors? {
     val parts = code.split("-")
-    if (parts.size != 5 || parts[0] != "BAYNOTE") return null
+    if ((parts.size != 5 && parts.size != 6) || parts[0] != "BAYNOTE") return null
     val name = parts[1].replace("+", " ")
     return try {
+        if (parts[2].length != 6 || parts[3].length != 6 || parts[4].length != 6) return null
         val primary    = Color(0xFF000000.or(parts[2].toLong(16)).toInt())
         val background = Color(0xFF000000.or(parts[3].toLong(16)).toInt())
         val surface    = Color(0xFF000000.or(parts[4].toLong(16)).toInt())
-        if (parts[2].length != 6 || parts[3].length != 6 || parts[4].length != 6) return null
-        CustomThemeColors(name = name, primary = primary, background = background, surface = surface)
+        val textColor  = if (parts.size == 6 && parts[5].length == 6)
+                             Color(0xFF000000.or(parts[5].toLong(16)).toInt()) else null
+        CustomThemeColors(name = name, primary = primary, background = background, surface = surface, textColor = textColor)
     } catch (_: NumberFormatException) { null }
 }

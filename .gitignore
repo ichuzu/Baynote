@@ -19,3 +19,7 @@ keystore.properties
 .idea/
 keystore.properties
 *.jks
+.claudeignore
+.claude
+CLAUDE.md
+ARCHITECTURE.md

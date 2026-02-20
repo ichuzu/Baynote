@@ -86,13 +86,13 @@ fun TableEditor(
 
         Surface(
             shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, borderColor),
+            border = BorderStroke(2.dp, borderColor),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column {
                 rows.forEachIndexed { rowIndex, row ->
                     if (rowIndex > 0) {
-                        HorizontalDivider(thickness = 1.dp, color = borderColor)
+                        HorizontalDivider(thickness = 2.dp, color = borderColor)
                     }
                     Row(
                         modifier = Modifier
@@ -101,7 +101,7 @@ fun TableEditor(
                     ) {
                         (0 until colCount).forEach { colIndex ->
                             if (colIndex > 0) {
-                                VerticalDivider(thickness = 1.dp, color = borderColor)
+                                VerticalDivider(thickness = 2.dp, color = borderColor)
                             }
 
                             key(rowIndex, colIndex) {

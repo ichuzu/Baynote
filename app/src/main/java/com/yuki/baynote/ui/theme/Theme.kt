@@ -441,48 +441,73 @@ fun colorSchemeFor(theme: AppTheme, dark: Boolean): ColorScheme = when (theme) {
 fun generateColorScheme(
     primary: Color,
     background: Color,
-    surface: Color,
+    surface: Color,       // user's "Card Surface" — note cards only
+    textColor: Color? = null,
     isDark: Boolean
 ): ColorScheme {
     fun contrast(c: Color) = if (c.luminance() > 0.179f) Color(0xFF1A1A1A) else Color(0xFFF0F0F0)
-    val onPrimary   = contrast(primary)
-    val onBg        = contrast(background)
-    val onSurf      = contrast(surface)
-    val primaryCont = if (isDark) lerp(primary, Color.Black, 0.45f) else lerp(primary, Color.White, 0.65f)
-    val secondary   = lerp(primary, Color(0xFF888888), 0.5f)
-    val outline     = lerp(onSurf, surface, 0.5f)
-    val surfVariant = lerp(surface, primary, 0.12f)
-    val scLow   = if (isDark) lerp(surface, Color.Black, 0.12f) else lerp(surface, Color.White, 0.4f)
-    val scLowest = if (isDark) lerp(surface, Color.Black, 0.22f) else lerp(surface, Color.White, 0.65f)
-    val scHigh   = lerp(surface, primary, 0.18f)
-    val scHighest = lerp(surface, primary, 0.28f)
 
+    val onBg       = textColor ?: contrast(background)  // text on screen / toolbar
+    val onCard     = contrast(surface)                   // text on note cards
+    val onPrimary  = contrast(primary)
+
+    val secondary    = lerp(primary, if (isDark) Color(0xFF888888) else Color(0xFF777777), 0.5f)
+    val primaryCont  = if (isDark) lerp(primary, Color.Black, 0.45f)
+                       else        lerp(primary, Color.White, 0.65f)
+    val tertiary     = lerp(primary, if (isDark) Color(0xFF80DEEA) else Color(0xFF26C6DA), 0.35f)
+    val tertiaryCont = if (isDark) lerp(tertiary, Color.Black, 0.40f)
+                       else        lerp(tertiary, Color.White, 0.65f)
+    val secCont      = if (isDark) lerp(secondary, Color.Black, 0.35f)
+                       else        lerp(secondary, Color.White, 0.60f)
+    val onSecCont    = if (isDark) lerp(secondary, Color.White, 0.50f)
+                       else        lerp(secondary, Color.Black, 0.55f)
+
+    // Surface container family: smooth gradient from background → user's card surface.
+    // This ensures TopAppBar (uses `surface` / `surfaceContainer`) always matches the
+    // background colour rather than the card colour.
+    val scLowest  = if (isDark) lerp(background, Color.Black, 0.10f)
+                    else        lerp(background, Color.White, 0.08f)
+    val scLow     = background
+    val scMid     = lerp(background, surface, 0.25f)   // TopAppBar elevated state
+    val scHigh    = lerp(background, surface, 0.60f)
+    val scHighest = surface                              // NoteCard background
+
+    // surfaceVariant: subtle primary tint on the background (chip containers, dividers)
+    val surfaceVariant    = lerp(background, primary, 0.14f)
+    // onSurfaceVariant derived from card contrast so it reads on both screen and cards
+    val onSurfaceVariant  = lerp(onCard, if (isDark) Color(0xFFBBBBBB) else Color(0xFF555555), 0.30f)
+
+    // outline: midpoint between text colour and background — readable everywhere
+    val outline       = lerp(onBg, background, 0.50f)
+    val outlineVariant = lerp(outline, background, 0.50f)
+
+    // KEY: M3 `surface` = background so TopAppBar/Scaffold stay dark when background is dark
     return if (isDark) darkColorScheme(
         primary = primary, onPrimary = onPrimary,
         primaryContainer = primaryCont, onPrimaryContainer = lerp(primary, Color.White, 0.55f),
         secondary = secondary, onSecondary = contrast(secondary),
-        secondaryContainer = lerp(secondary, Color.Black, 0.35f), onSecondaryContainer = lerp(secondary, Color.White, 0.5f),
-        tertiary = lerp(primary, Color(0xFF80DEEA), 0.35f), onTertiary = onPrimary,
-        tertiaryContainer = lerp(lerp(primary, Color(0xFF80DEEA), 0.35f), Color.Black, 0.4f), onTertiaryContainer = lerp(primary, Color.White, 0.55f),
+        secondaryContainer = secCont, onSecondaryContainer = onSecCont,
+        tertiary = tertiary, onTertiary = contrast(tertiary),
+        tertiaryContainer = tertiaryCont, onTertiaryContainer = lerp(tertiary, Color.White, 0.55f),
         background = background, onBackground = onBg,
-        surface = surface, onSurface = onSurf,
-        surfaceVariant = surfVariant, onSurfaceVariant = lerp(onSurf, Color(0xFFAAAAAA), 0.3f),
+        surface = background, onSurface = onBg,
+        surfaceVariant = surfaceVariant, onSurfaceVariant = onSurfaceVariant,
         surfaceContainerLowest = scLowest, surfaceContainerLow = scLow,
-        surfaceContainer = surface, surfaceContainerHigh = scHigh, surfaceContainerHighest = scHighest,
-        outline = outline, outlineVariant = lerp(outline, surface, 0.45f)
+        surfaceContainer = scMid, surfaceContainerHigh = scHigh, surfaceContainerHighest = scHighest,
+        outline = outline, outlineVariant = outlineVariant
     ) else lightColorScheme(
         primary = primary, onPrimary = onPrimary,
         primaryContainer = primaryCont, onPrimaryContainer = lerp(primary, Color.Black, 0.65f),
         secondary = secondary, onSecondary = contrast(secondary),
-        secondaryContainer = lerp(secondary, Color.White, 0.6f), onSecondaryContainer = lerp(secondary, Color.Black, 0.55f),
-        tertiary = lerp(primary, Color(0xFF26C6DA), 0.35f), onTertiary = contrast(lerp(primary, Color(0xFF26C6DA), 0.35f)),
-        tertiaryContainer = lerp(lerp(primary, Color(0xFF26C6DA), 0.35f), Color.White, 0.65f), onTertiaryContainer = lerp(primary, Color.Black, 0.6f),
+        secondaryContainer = secCont, onSecondaryContainer = onSecCont,
+        tertiary = tertiary, onTertiary = contrast(tertiary),
+        tertiaryContainer = tertiaryCont, onTertiaryContainer = lerp(tertiary, Color.Black, 0.60f),
         background = background, onBackground = onBg,
-        surface = surface, onSurface = onSurf,
-        surfaceVariant = surfVariant, onSurfaceVariant = lerp(onSurf, Color(0xFF555555), 0.3f),
+        surface = background, onSurface = onBg,
+        surfaceVariant = surfaceVariant, onSurfaceVariant = onSurfaceVariant,
         surfaceContainerLowest = scLowest, surfaceContainerLow = scLow,
-        surfaceContainer = surface, surfaceContainerHigh = scHigh, surfaceContainerHighest = scHighest,
-        outline = outline, outlineVariant = lerp(outline, surface, 0.45f)
+        surfaceContainer = scMid, surfaceContainerHigh = scHigh, surfaceContainerHighest = scHighest,
+        outline = outline, outlineVariant = outlineVariant
     )
 }
 
@@ -496,7 +521,7 @@ fun BaynoteTheme(
 ) {
     val colorScheme = when {
         appTheme == AppTheme.CUSTOM && customColors != null ->
-            generateColorScheme(customColors.primary, customColors.background, customColors.surface, darkTheme)
+            generateColorScheme(customColors.primary, customColors.background, customColors.surface, customColors.textColor, darkTheme)
         appTheme == AppTheme.DEFAULT && dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

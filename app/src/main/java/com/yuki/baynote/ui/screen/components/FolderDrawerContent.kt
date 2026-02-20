@@ -51,7 +51,7 @@ fun FolderDrawerContent(
     onSettingsClick: () -> Unit = {}
 ) {
     var foldersExpanded by remember { mutableStateOf(true) }
-    var labelsExpanded by remember { mutableStateOf(true) }
+    var labelsExpanded by remember { mutableStateOf(false) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var showCreateLabelDialog by remember { mutableStateOf(false) }
     var folderToDelete by remember { mutableStateOf<Folder?>(null) }
@@ -127,29 +127,11 @@ fun FolderDrawerContent(
             }
         }
 
+        Spacer(Modifier.weight(1f))
+
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-        // Labels section header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { labelsExpanded = !labelsExpanded }
-                .padding(horizontal = 28.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Labels",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.weight(1f)
-            )
-            Icon(
-                if (labelsExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (labelsExpanded) "Collapse" else "Expand",
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
+        // Labels section — anchored above Settings, expands upward
         AnimatedVisibility(visible = labelsExpanded) {
             androidx.compose.foundation.layout.Column {
                 labels.forEach { label ->
@@ -180,7 +162,26 @@ fun FolderDrawerContent(
             }
         }
 
-        Spacer(Modifier.weight(1f))
+        // Labels header — tapping expands the list upward
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { labelsExpanded = !labelsExpanded }
+                .padding(horizontal = 28.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Labels",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                if (labelsExpanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+                contentDescription = if (labelsExpanded) "Collapse" else "Expand",
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 

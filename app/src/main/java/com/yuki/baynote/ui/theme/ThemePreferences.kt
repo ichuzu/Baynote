@@ -14,6 +14,7 @@ object ThemePreferences {
     private const val KEY_CUSTOM_PRIMARY = "custom_primary"
     private const val KEY_CUSTOM_BACKGROUND = "custom_background"
     private const val KEY_CUSTOM_SURFACE = "custom_surface"
+    private const val KEY_CUSTOM_TEXT_COLOR = "custom_text_color"
     private const val KEY_SAVED_THEMES = "saved_themes"
 
     // Font size: 12, 14, 16 (default), 18, 20
@@ -78,11 +79,14 @@ object ThemePreferences {
         val primary    = prefs.getInt(KEY_CUSTOM_PRIMARY,    Color(0xFF6750A4).toArgb())
         val background = prefs.getInt(KEY_CUSTOM_BACKGROUND, Color(0xFF1C1B1F).toArgb())
         val surface    = prefs.getInt(KEY_CUSTOM_SURFACE,    Color(0xFF110F13).toArgb())
+        val textColor  = if (prefs.contains(KEY_CUSTOM_TEXT_COLOR))
+                             Color(prefs.getInt(KEY_CUSTOM_TEXT_COLOR, 0)) else null
         return CustomThemeColors(
             name = name,
             primary = Color(primary),
             background = Color(background),
-            surface = Color(surface)
+            surface = Color(surface),
+            textColor = textColor
         )
     }
 
@@ -93,6 +97,10 @@ object ThemePreferences {
             .putInt(KEY_CUSTOM_PRIMARY,    colors.primary.toArgb())
             .putInt(KEY_CUSTOM_BACKGROUND, colors.background.toArgb())
             .putInt(KEY_CUSTOM_SURFACE,    colors.surface.toArgb())
+            .apply {
+                if (colors.textColor != null) putInt(KEY_CUSTOM_TEXT_COLOR, colors.textColor.toArgb())
+                else remove(KEY_CUSTOM_TEXT_COLOR)
+            }
             .apply()
     }
 
@@ -107,7 +115,8 @@ object ThemePreferences {
                     name       = obj.getString("name"),
                     primary    = Color(obj.getInt("primary")),
                     background = Color(obj.getInt("background")),
-                    surface    = Color(obj.getInt("surface"))
+                    surface    = Color(obj.getInt("surface")),
+                    textColor  = if (obj.has("textColor")) Color(obj.getInt("textColor")) else null
                 )
             }
         } catch (_: Exception) { emptyList() }
@@ -121,6 +130,7 @@ object ThemePreferences {
                 put("primary",    theme.primary.toArgb())
                 put("background", theme.background.toArgb())
                 put("surface",    theme.surface.toArgb())
+                if (theme.textColor != null) put("textColor", theme.textColor.toArgb())
             }
             array.put(obj)
         }
