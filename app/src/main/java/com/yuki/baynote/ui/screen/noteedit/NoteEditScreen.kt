@@ -90,6 +90,8 @@ fun NoteEditScreen(
     var focusedSegId by remember { mutableIntStateOf(-1) }
 
     val undoManager = remember { UndoRedoManager() }
+    var isFormulaMode by remember { mutableStateOf(false) }
+    var formulaInsertFn by remember { mutableStateOf<((String) -> Unit)?>(null) }
 
     fun newId() = nextSegmentId++
 
@@ -396,6 +398,10 @@ fun NoteEditScreen(
                                         }
                                     },
                                     onUndoCheckpoint = { pushUndoState() },
+                                    onFormulaModeChange = { active, insertFn ->
+                                        isFormulaMode = active
+                                        formulaInsertFn = insertFn
+                                    },
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
                             }
@@ -439,7 +445,13 @@ fun NoteEditScreen(
                 }
             }
 
-            // Formatting toolbar
+            // Formatting toolbar (swapped for FormulaToolbar when a formula cell is focused)
+            if (isFormulaMode) {
+                FormulaToolbar(
+                    onInsert = { op -> formulaInsertFn?.invoke(op) },
+                    onAccept = { formulaInsertFn?.invoke(" ") }
+                )
+            } else {
             FormattingToolbar(
                 onFormat = { option ->
                     pushUndoState()
@@ -502,6 +514,7 @@ fun NoteEditScreen(
                     }
                 }
             )
+            }
         }
     }
 

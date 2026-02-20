@@ -69,3 +69,40 @@ fun FormattingToolbar(
         }
     }
 }
+
+@Composable
+fun FormulaToolbar(
+    onInsert: (String) -> Unit,
+    onAccept: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        tonalElevation = 2.dp,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 2.dp)
+        ) {
+            IconButton(onClick = { onInsert("+") }) {
+                Text("+", fontSize = 18.sp, fontWeight = FontWeight.Normal)
+            }
+            IconButton(onClick = { onInsert("-") }) {
+                Text("-", fontSize = 18.sp, fontWeight = FontWeight.Normal)
+            }
+            IconButton(onClick = { onInsert("*") }) {
+                Text("\u00D7", fontSize = 18.sp, fontWeight = FontWeight.Normal)
+            }
+            IconButton(onClick = { onInsert("/") }) {
+                Text("\u00F7", fontSize = 18.sp, fontWeight = FontWeight.Normal)
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onAccept) {
+                Text("\u2713", fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}

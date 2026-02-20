@@ -25,7 +25,12 @@ app/src/main/java/com/yuki/baynote/
 │   │   │   └── NoteListScreen.kt       # Home screen UI (list, drawer, search, FAB)
 │   │   ├── noteedit/
 │   │   │   ├── NoteEditViewModel.kt    # State + logic for creating/editing a note
-│   │   │   └── NoteEditScreen.kt       # Note editor UI (title + content fields)
+│   │   │   ├── NoteEditScreen.kt       # Note editor UI (title + content fields)
+│   │   │   ├── TableEditor.kt          # Editable table widget with formula support
+│   │   │   ├── FormattingToolbar.kt    # Formatting toolbar + FormulaToolbar
+│   │   │   ├── FormulaEvaluator.kt     # Formula parser/evaluator for table cells
+│   │   │   ├── UndoRedoManager.kt      # Undo/redo state stack
+│   │   │   └── markdown/               # Markdown parsing & visual transformation
 │   │   └── components/
 │   │       ├── NoteCard.kt             # Single note card (used in lists)
 │   │       ├── FolderDrawerContent.kt  # Sidebar drawer with folder list
@@ -65,8 +70,12 @@ app/src/main/java/com/yuki/baynote/
 |------|-----------------|
 | `notelist/NoteListScreen.kt` | The home screen: top bar, search bar, note list (LazyColumn), floating action button, and the navigation drawer. Also used for folder views (with a back arrow instead of the hamburger menu). |
 | `notelist/NoteListViewModel.kt` | Provides `uiState` (notes, folders, search query) to the screen. Contains all actions: pin, delete, move, create folder, search. |
-| `noteedit/NoteEditScreen.kt` | The note editor: borderless title + content text fields, pin button, delete button. Auto-saves when you press back. |
+| `noteedit/NoteEditScreen.kt` | The note editor: borderless title + content text fields, pin button, delete button. Auto-saves when you press back. Manages `isFormulaMode` / `formulaInsertFn` state to swap the formatting toolbar for `FormulaToolbar` when a formula cell is focused. |
 | `noteedit/NoteEditViewModel.kt` | Loads a note (or starts blank for new), tracks title/content changes, handles save and delete. |
+| `noteedit/TableEditor.kt` | Renders and edits a table. Each cell is a `BasicTextField`. Supports formula cells (cells starting with `=`): shows a live result chip below the formula, accepts on space or focus loss, and intercepts taps on other cells to insert cell references instead of moving focus. Calls `onFormulaModeChange` to notify the parent screen when formula mode enters/exits. |
+| `noteedit/FormattingToolbar.kt` | Contains two toolbars: `FormattingToolbar` (H1/H2/H3, Bold, Italic, Insert Table) and `FormulaToolbar` (+, -, ×, ÷, ✓). `NoteEditScreen` swaps between them based on `isFormulaMode`. |
+| `noteedit/FormulaEvaluator.kt` | `object FormulaEvaluator` with `buildCellRef`, `parseCellRef`, `evaluate`, and `formatResult`. Private `ExpressionParser` does recursive-descent arithmetic (+, -, *, /) with correct precedence. Cell refs use A1 notation (col letter + 1-indexed row). Empty/non-numeric cells resolve to 0. |
+| `noteedit/UndoRedoManager.kt` | Simple string-stack undo/redo manager used by `NoteEditScreen`. |
 
 ### Reusable Components
 
@@ -160,3 +169,24 @@ Screen (Composable) ──observes──> ViewModel ──calls──> DAO ─�
 - **ViewModels** hold state (`StateFlow`) and business logic, call DAOs in coroutines
 - **DAOs** return `Flow<List<...>>` for reactive queries (UI auto-updates when data changes)
 - No repository layer — ViewModels access DAOs directly via `BaynoteDatabase.getInstance()`
+
+## Table Formula Support
+
+Cells in a table that start with `=` enter formula mode.
+
+### Cell reference notation
+- Columns: A, B, C … (0-indexed → letter, max 26 columns)
+- Rows: 1, 2, 3 … (0-indexed + 1)
+- Example: `rows[1][2]` → `C2`
+
+### Accept mechanisms
+| Trigger | Behaviour |
+|---------|-----------|
+| Type space at end of valid formula | Cell replaced with computed result |
+| Tap ✓ in FormulaToolbar | Sends a space → same path as above |
+| Focus leaves the formula cell | Auto-accepted if result is valid; stays as formula text if invalid |
+
+### Extending formulas
+- Add new operators in `ExpressionParser` inside `FormulaEvaluator.kt`
+- Multi-letter column support: update `buildCellRef` and `parseCellRef` (currently single A–Z only)
+- Add function support (e.g. `SUM(A1:A3)`) by extending `parsePrimary` in `ExpressionParser`

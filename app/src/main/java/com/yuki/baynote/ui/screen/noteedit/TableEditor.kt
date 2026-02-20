@@ -1,6 +1,7 @@
 package com.yuki.baynote.ui.screen.noteedit
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -57,11 +59,14 @@ fun TableEditor(
     onRowsChange: (List<List<String>>) -> Unit,
     onDelete: () -> Unit,
     onUndoCheckpoint: () -> Unit = {},
+    onFormulaModeChange: ((isActive: Boolean, insertAtCursor: ((String) -> Unit)?) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val borderColor = MaterialTheme.colorScheme.outlineVariant
     val colCount = rows.maxOfOrNull { it.size } ?: 2
     var focusCellRequest by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var focusedCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var insertIntoCellRequest by remember { mutableStateOf<Triple<Int, Int, String>?>(null) }
 
     fun updateCell(rowIndex: Int, colIndex: Int, value: String) {
         val newRows = rows.map { it.toMutableList() }.toMutableList()
@@ -70,6 +75,18 @@ fun TableEditor(
         }
         newRows[rowIndex][colIndex] = value
         onRowsChange(newRows)
+    }
+
+    // Notify parent when formula mode changes
+    LaunchedEffect(focusedCell, rows) {
+        val fc = focusedCell
+        val isFocusedFormula = fc?.let { (r, c) ->
+            rows.getOrNull(r)?.getOrNull(c)?.startsWith("=")
+        } == true
+        val insertFn: ((String) -> Unit)? = if (fc != null && isFocusedFormula) {
+            { text -> insertIntoCellRequest = Triple(fc.first, fc.second, text) }
+        } else null
+        onFormulaModeChange?.invoke(isFocusedFormula, insertFn)
     }
 
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -128,90 +145,174 @@ fun TableEditor(
                                     }
                                 }
 
-                                BasicTextField(
-                                    value = cellTfv,
-                                    keyboardOptions = KeyboardOptions(
-                                        capitalization = KeyboardCapitalization.Sentences
-                                    ),
-                                    onValueChange = { newTfv ->
-                                        if ('\n' in newTfv.text) {
-                                            val cleaned = newTfv.text.replace("\n", "")
-                                            cellTfv = TextFieldValue(cleaned, TextRange(cleaned.length))
-                                            enterCount++
-                                            if (enterCount >= 2) {
-                                                onUndoCheckpoint()
-                                                val newRows = rows.toMutableList()
-                                                newRows.add(rowIndex + 1, List(colCount) { "" })
-                                                focusCellRequest = Pair(rowIndex + 1, 0)
-                                                onRowsChange(newRows)
-                                                enterCount = 0
-                                            }
-                                            if (cleaned != cellValue) {
-                                                updateCell(rowIndex, colIndex, cleaned)
-                                            }
-                                        } else {
-                                            // Word boundary detection for undo
-                                            val oldText = cellTfv.text
-                                            val newText = newTfv.text
-                                            val shouldPush = when {
-                                                newText.length > oldText.length + 1 -> true // paste
-                                                newText.length == oldText.length + 1 -> {
-                                                    val pos = newTfv.selection.start - 1
-                                                    pos >= 0 && newText[pos] == ' '
-                                                }
-                                                else -> false
-                                            }
-                                            if (shouldPush) onUndoCheckpoint()
+                                // Insert text at cursor position when requested
+                                LaunchedEffect(insertIntoCellRequest) {
+                                    val req = insertIntoCellRequest
+                                    if (req != null && req.first == rowIndex && req.second == colIndex) {
+                                        val cursorPos = cellTfv.selection.end
+                                        val newText = cellTfv.text.substring(0, cursorPos) +
+                                            req.third +
+                                            cellTfv.text.substring(cursorPos)
+                                        val newPos = cursorPos + req.third.length
+                                        cellTfv = TextFieldValue(newText, TextRange(newPos))
+                                        updateCell(rowIndex, colIndex, newText)
+                                        insertIntoCellRequest = null
+                                    }
+                                }
 
-                                            cellTfv = newTfv
-                                            enterCount = 0
-                                            backspaceOnEmptyCount = 0
-                                            if (newTfv.text != cellValue) {
-                                                updateCell(rowIndex, colIndex, newTfv.text)
-                                            }
-                                        }
-                                    },
-                                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    ),
-                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(12.dp)
-                                        .focusRequester(cellFocusRequester)
-                                        .onPreviewKeyEvent { event ->
-                                            if (event.key == Key.Backspace &&
-                                                event.type == KeyEventType.KeyDown &&
-                                                cellTfv.text.isEmpty()
-                                            ) {
-                                                backspaceOnEmptyCount++
-                                                if (backspaceOnEmptyCount >= 2 && rows.size > 1) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    BasicTextField(
+                                        value = cellTfv,
+                                        keyboardOptions = KeyboardOptions(
+                                            capitalization = KeyboardCapitalization.Sentences
+                                        ),
+                                        onValueChange = { newTfv ->
+                                            if ('\n' in newTfv.text) {
+                                                val cleaned = newTfv.text.replace("\n", "")
+                                                cellTfv = TextFieldValue(cleaned, TextRange(cleaned.length))
+                                                enterCount++
+                                                if (enterCount >= 2) {
                                                     onUndoCheckpoint()
                                                     val newRows = rows.toMutableList()
-                                                    newRows.removeAt(rowIndex)
+                                                    newRows.add(rowIndex + 1, List(colCount) { "" })
+                                                    focusCellRequest = Pair(rowIndex + 1, 0)
                                                     onRowsChange(newRows)
+                                                    enterCount = 0
+                                                }
+                                                if (cleaned != cellValue) {
+                                                    updateCell(rowIndex, colIndex, cleaned)
+                                                }
+                                            } else {
+                                                val oldText = cellTfv.text
+                                                val newText = newTfv.text
+                                                // Formula space-accept: space at end of valid formula → replace with result
+                                                val accepted = if (
+                                                    oldText.startsWith("=") &&
+                                                    newText.length == oldText.length + 1 &&
+                                                    newText.endsWith(" ")
+                                                ) {
+                                                    val result = FormulaEvaluator.evaluate(oldText, rows)
+                                                    if (result != null) {
+                                                        val formatted = FormulaEvaluator.formatResult(result)
+                                                        cellTfv = TextFieldValue(formatted, TextRange(formatted.length))
+                                                        updateCell(rowIndex, colIndex, formatted)
+                                                        true
+                                                    } else false
+                                                } else false
+
+                                                if (!accepted) {
+                                                    // Word boundary detection for undo
+                                                    val shouldPush = when {
+                                                        newText.length > oldText.length + 1 -> true // paste
+                                                        newText.length == oldText.length + 1 -> {
+                                                            val pos = newTfv.selection.start - 1
+                                                            pos >= 0 && newText[pos] == ' '
+                                                        }
+                                                        else -> false
+                                                    }
+                                                    if (shouldPush) onUndoCheckpoint()
+
+                                                    cellTfv = newTfv
+                                                    enterCount = 0
                                                     backspaceOnEmptyCount = 0
-                                                    true
+                                                    if (newTfv.text != cellValue) {
+                                                        updateCell(rowIndex, colIndex, newTfv.text)
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp)
+                                            .focusRequester(cellFocusRequester)
+                                            .onFocusChanged { state ->
+                                                if (state.isFocused) {
+                                                    focusedCell = Pair(rowIndex, colIndex)
+                                                } else {
+                                                    if (focusedCell == Pair(rowIndex, colIndex)) {
+                                                        focusedCell = null
+                                                    }
+                                                    // Auto-accept formula on focus loss
+                                                    if (cellTfv.text.startsWith("=")) {
+                                                        val result = FormulaEvaluator.evaluate(cellTfv.text, rows)
+                                                        if (result != null) {
+                                                            val formatted = FormulaEvaluator.formatResult(result)
+                                                            cellTfv = TextFieldValue(formatted, TextRange(formatted.length))
+                                                            updateCell(rowIndex, colIndex, formatted)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.key == Key.Backspace &&
+                                                    event.type == KeyEventType.KeyDown &&
+                                                    cellTfv.text.isEmpty()
+                                                ) {
+                                                    backspaceOnEmptyCount++
+                                                    if (backspaceOnEmptyCount >= 2 && rows.size > 1) {
+                                                        onUndoCheckpoint()
+                                                        val newRows = rows.toMutableList()
+                                                        newRows.removeAt(rowIndex)
+                                                        onRowsChange(newRows)
+                                                        backspaceOnEmptyCount = 0
+                                                        true
+                                                    } else {
+                                                        false
+                                                    }
                                                 } else {
                                                     false
                                                 }
-                                            } else {
-                                                false
+                                            },
+                                        decorationBox = { innerTextField ->
+                                            Column {
+                                                Box {
+                                                    if (cellTfv.text.isEmpty() && rowIndex == 0) {
+                                                        Text(
+                                                            "Header",
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                                        )
+                                                    }
+                                                    innerTextField()
+                                                }
+                                                if (cellTfv.text.startsWith("=")) {
+                                                    val formulaResult = FormulaEvaluator.evaluate(cellTfv.text, rows)
+                                                    Text(
+                                                        text = if (formulaResult != null)
+                                                            "= ${FormulaEvaluator.formatResult(formulaResult)}"
+                                                        else "ERR",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = if (formulaResult != null)
+                                                            MaterialTheme.colorScheme.primary
+                                                        else MaterialTheme.colorScheme.error
+                                                    )
+                                                }
                                             }
-                                        },
-                                    decorationBox = { innerTextField ->
-                                        Box {
-                                            if (cellTfv.text.isEmpty() && rowIndex == 0) {
-                                                Text(
-                                                    "Header",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                                )
-                                            }
-                                            innerTextField()
                                         }
+                                    )
+
+                                    // Cell-reference overlay: intercepts taps when another cell has an active formula
+                                    val isFocusedFormula = focusedCell?.let { (r, c) ->
+                                        rows.getOrNull(r)?.getOrNull(c)?.startsWith("=")
+                                    } == true
+                                    if (isFocusedFormula && focusedCell != Pair(rowIndex, colIndex)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .matchParentSize()
+                                                .clickable {
+                                                    val ref = FormulaEvaluator.buildCellRef(rowIndex, colIndex)
+                                                    val fc = focusedCell
+                                                    if (fc != null) {
+                                                        insertIntoCellRequest = Triple(fc.first, fc.second, ref)
+                                                    }
+                                                }
+                                        )
                                     }
-                                )
+                                }
                             }
                         }
                     }
