@@ -6,12 +6,17 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yuki.baynote.data.BaynoteDatabase
 import com.yuki.baynote.data.dao.NoteDao
+import com.yuki.baynote.data.dao.TagDao
 import com.yuki.baynote.data.model.Note
+import com.yuki.baynote.data.model.NoteTagCrossRef
+import com.yuki.baynote.data.model.Tag
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class NoteEditUiState(
@@ -20,6 +25,7 @@ data class NoteEditUiState(
     val content: String = "",
     val folderId: Long? = null,
     val isPinned: Boolean = false,
+    val tags: List<Tag> = emptyList(),
     val isNew: Boolean = true,
     val isSaved: Boolean = false,
     val isDeleted: Boolean = false,
@@ -28,6 +34,7 @@ data class NoteEditUiState(
 
 class NoteEditViewModel(
     private val noteDao: NoteDao,
+    private val tagDao: TagDao,
     private val noteId: Long,
     initialFolderId: Long? = null
 ) : ViewModel() {
@@ -35,20 +42,24 @@ class NoteEditViewModel(
     private val _uiState = MutableStateFlow(NoteEditUiState())
     val uiState: StateFlow<NoteEditUiState> = _uiState.asStateFlow()
 
+    val allTags: StateFlow<List<Tag>> = tagDao.getAllTagsSortedByUsage()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private var autoSaveJob: Job? = null
 
     init {
         if (noteId != 0L) {
             viewModelScope.launch {
-                noteDao.getNoteById(noteId)?.let { note ->
+                noteDao.getNoteWithTags(noteId)?.let { nwt ->
                     _uiState.value = NoteEditUiState(
-                        id = note.id,
-                        title = note.title,
-                        content = note.content,
-                        folderId = note.folderId,
-                        isPinned = note.isPinned,
+                        id = nwt.note.id,
+                        title = nwt.note.title,
+                        content = nwt.note.content,
+                        folderId = nwt.note.folderId,
+                        isPinned = nwt.note.isPinned,
+                        tags = nwt.tags,
                         isNew = false,
-                        createdAt = note.createdAt
+                        createdAt = nwt.note.createdAt
                     )
                 }
             }
@@ -110,6 +121,43 @@ class NoteEditViewModel(
         _uiState.value = _uiState.value.copy(isPinned = !_uiState.value.isPinned)
     }
 
+    fun createAndAddTag(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            val existing = tagDao.getTagByName(trimmed)
+            val tag = if (existing != null) existing else {
+                val id = tagDao.insertTag(Tag(name = trimmed))
+                Tag(id = id, name = trimmed)
+            }
+            addTag(tag)
+        }
+    }
+
+    fun addTag(tag: Tag) {
+        val state = _uiState.value
+        if (state.tags.any { it.id == tag.id }) return
+        viewModelScope.launch {
+            // Save note first if it's new so we have an ID
+            if (state.isNew) persistToDatabase()
+            val currentId = _uiState.value.id
+            if (currentId == 0L) return@launch
+            tagDao.insertNoteTagCrossRef(NoteTagCrossRef(currentId, tag.id))
+            tagDao.incrementUsage(tag.id)
+            _uiState.value = _uiState.value.copy(tags = _uiState.value.tags + tag)
+        }
+    }
+
+    fun removeTag(tag: Tag) {
+        val state = _uiState.value
+        if (state.isNew || state.id == 0L) return
+        viewModelScope.launch {
+            tagDao.deleteNoteTagCrossRef(NoteTagCrossRef(state.id, tag.id))
+            tagDao.decrementUsage(tag.id)
+            _uiState.value = _uiState.value.copy(tags = state.tags.filter { it.id != tag.id })
+        }
+    }
+
     fun saveNote() {
         autoSaveJob?.cancel()
         val state = _uiState.value
@@ -149,7 +197,7 @@ class NoteEditViewModel(
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     val db = BaynoteDatabase.getInstance(application)
-                    return NoteEditViewModel(db.noteDao(), noteId, initialFolderId) as T
+                    return NoteEditViewModel(db.noteDao(), db.tagDao(), noteId, initialFolderId) as T
                 }
             }
     }

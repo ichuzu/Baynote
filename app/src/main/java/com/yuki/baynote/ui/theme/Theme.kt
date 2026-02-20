@@ -10,7 +10,11 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+
+enum class DarkModePreference { LIGHT, DARK }
 
 enum class AppTheme(val label: String, val previewColor: Color) {
     DEFAULT("Default", Purple40),
@@ -18,7 +22,9 @@ enum class AppTheme(val label: String, val previewColor: Color) {
     FOREST("Forest", ForestPrimary),
     SUNSET("Sunset", SunsetPrimary),
     MONOCHROME("Mono", MonoPrimary),
-    ROSE("Rose", RosePrimary)
+    ROSE("Rose", RosePrimary),
+    PARCHMENT("Parchment", ParchmentPrimary),
+    CUSTOM("Custom", Color.Gray)
 }
 
 
@@ -364,6 +370,63 @@ private val RoseDarkColorScheme = darkColorScheme(
 )
 
 
+private val ParchmentLightColorScheme = lightColorScheme(
+    primary = ParchmentPrimary,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFF5DCA0),
+    onPrimaryContainer = Color(0xFF2C1800),
+    secondary = ParchmentSecondary,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFEEDCBF),
+    onSecondaryContainer = Color(0xFF251408),
+    tertiary = ParchmentTertiary,
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFDEE8B0),
+    onTertiaryContainer = Color(0xFF1C2608),
+    background = Color(0xFFF5EDD8),
+    onBackground = Color(0xFF231D10),
+    surface = Color(0xFFF5EDD8),
+    onSurface = Color(0xFF231D10),
+    surfaceVariant = Color(0xFFE8DCC4),
+    onSurfaceVariant = Color(0xFF52452E),
+    surfaceContainerLowest = Color(0xFFFFFEF5),
+    surfaceContainerLow = Color(0xFFFAF4E6),
+    surfaceContainer = Color(0xFFEDE5CE),
+    surfaceContainerHigh = Color(0xFFE5DCC2),
+    surfaceContainerHighest = Color(0xFFDDD3B6),
+    outline = Color(0xFF877358),
+    outlineVariant = Color(0xFFD0BA96)
+)
+
+private val ParchmentDarkColorScheme = darkColorScheme(
+    primary = ParchmentPrimaryDark,
+    onPrimary = Color(0xFF3A2800),
+    primaryContainer = Color(0xFF5A3F10),
+    onPrimaryContainer = Color(0xFFF5DCA0),
+    secondary = ParchmentSecondaryDark,
+    onSecondary = Color(0xFF3A2410),
+    secondaryContainer = Color(0xFF52381E),
+    onSecondaryContainer = Color(0xFFEEDCBF),
+    tertiary = ParchmentTertiaryDark,
+    onTertiary = Color(0xFF2A3410),
+    tertiaryContainer = Color(0xFF3E5018),
+    onTertiaryContainer = Color(0xFFDEE8B0),
+    background = Color(0xFF1C170E),
+    onBackground = Color(0xFFEAE0CC),
+    surface = Color(0xFF1C170E),
+    onSurface = Color(0xFFEAE0CC),
+    surfaceVariant = Color(0xFF42382A),
+    onSurfaceVariant = Color(0xFFD0BA9A),
+    surfaceContainerLowest = Color(0xFF12100A),
+    surfaceContainerLow = Color(0xFF201C14),
+    surfaceContainer = Color(0xFF28221A),
+    surfaceContainerHigh = Color(0xFF322C22),
+    surfaceContainerHighest = Color(0xFF3E382C),
+    outline = Color(0xFF9A8470),
+    outlineVariant = Color(0xFF524430)
+)
+
+
 fun colorSchemeFor(theme: AppTheme, dark: Boolean): ColorScheme = when (theme) {
     AppTheme.DEFAULT    -> if (dark) DefaultDarkColorScheme else DefaultLightColorScheme
     AppTheme.OCEAN      -> if (dark) OceanDarkColorScheme else OceanLightColorScheme
@@ -371,16 +434,69 @@ fun colorSchemeFor(theme: AppTheme, dark: Boolean): ColorScheme = when (theme) {
     AppTheme.SUNSET     -> if (dark) SunsetDarkColorScheme else SunsetLightColorScheme
     AppTheme.MONOCHROME -> if (dark) MonoDarkColorScheme else MonoLightColorScheme
     AppTheme.ROSE       -> if (dark) RoseDarkColorScheme else RoseLightColorScheme
+    AppTheme.PARCHMENT  -> if (dark) ParchmentDarkColorScheme else ParchmentLightColorScheme
+    AppTheme.CUSTOM     -> if (dark) DefaultDarkColorScheme else DefaultLightColorScheme
+}
+
+fun generateColorScheme(
+    primary: Color,
+    background: Color,
+    surface: Color,
+    isDark: Boolean
+): ColorScheme {
+    fun contrast(c: Color) = if (c.luminance() > 0.179f) Color(0xFF1A1A1A) else Color(0xFFF0F0F0)
+    val onPrimary   = contrast(primary)
+    val onBg        = contrast(background)
+    val onSurf      = contrast(surface)
+    val primaryCont = if (isDark) lerp(primary, Color.Black, 0.45f) else lerp(primary, Color.White, 0.65f)
+    val secondary   = lerp(primary, Color(0xFF888888), 0.5f)
+    val outline     = lerp(onSurf, surface, 0.5f)
+    val surfVariant = lerp(surface, primary, 0.12f)
+    val scLow   = if (isDark) lerp(surface, Color.Black, 0.12f) else lerp(surface, Color.White, 0.4f)
+    val scLowest = if (isDark) lerp(surface, Color.Black, 0.22f) else lerp(surface, Color.White, 0.65f)
+    val scHigh   = lerp(surface, primary, 0.18f)
+    val scHighest = lerp(surface, primary, 0.28f)
+
+    return if (isDark) darkColorScheme(
+        primary = primary, onPrimary = onPrimary,
+        primaryContainer = primaryCont, onPrimaryContainer = lerp(primary, Color.White, 0.55f),
+        secondary = secondary, onSecondary = contrast(secondary),
+        secondaryContainer = lerp(secondary, Color.Black, 0.35f), onSecondaryContainer = lerp(secondary, Color.White, 0.5f),
+        tertiary = lerp(primary, Color(0xFF80DEEA), 0.35f), onTertiary = onPrimary,
+        tertiaryContainer = lerp(lerp(primary, Color(0xFF80DEEA), 0.35f), Color.Black, 0.4f), onTertiaryContainer = lerp(primary, Color.White, 0.55f),
+        background = background, onBackground = onBg,
+        surface = surface, onSurface = onSurf,
+        surfaceVariant = surfVariant, onSurfaceVariant = lerp(onSurf, Color(0xFFAAAAAA), 0.3f),
+        surfaceContainerLowest = scLowest, surfaceContainerLow = scLow,
+        surfaceContainer = surface, surfaceContainerHigh = scHigh, surfaceContainerHighest = scHighest,
+        outline = outline, outlineVariant = lerp(outline, surface, 0.45f)
+    ) else lightColorScheme(
+        primary = primary, onPrimary = onPrimary,
+        primaryContainer = primaryCont, onPrimaryContainer = lerp(primary, Color.Black, 0.65f),
+        secondary = secondary, onSecondary = contrast(secondary),
+        secondaryContainer = lerp(secondary, Color.White, 0.6f), onSecondaryContainer = lerp(secondary, Color.Black, 0.55f),
+        tertiary = lerp(primary, Color(0xFF26C6DA), 0.35f), onTertiary = contrast(lerp(primary, Color(0xFF26C6DA), 0.35f)),
+        tertiaryContainer = lerp(lerp(primary, Color(0xFF26C6DA), 0.35f), Color.White, 0.65f), onTertiaryContainer = lerp(primary, Color.Black, 0.6f),
+        background = background, onBackground = onBg,
+        surface = surface, onSurface = onSurf,
+        surfaceVariant = surfVariant, onSurfaceVariant = lerp(onSurf, Color(0xFF555555), 0.3f),
+        surfaceContainerLowest = scLowest, surfaceContainerLow = scLow,
+        surfaceContainer = surface, surfaceContainerHigh = scHigh, surfaceContainerHighest = scHighest,
+        outline = outline, outlineVariant = lerp(outline, surface, 0.45f)
+    )
 }
 
 @Composable
 fun BaynoteTheme(
     appTheme: AppTheme = AppTheme.DEFAULT,
+    customColors: CustomThemeColors? = null,
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
+        appTheme == AppTheme.CUSTOM && customColors != null ->
+            generateColorScheme(customColors.primary, customColors.background, customColors.surface, darkTheme)
         appTheme == AppTheme.DEFAULT && dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

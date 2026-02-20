@@ -2,10 +2,13 @@ package com.yuki.baynote.ui.screen.notelist
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -15,6 +18,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,10 +44,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.yuki.baynote.data.model.Folder
 import com.yuki.baynote.data.model.NoteWithTags
+import com.yuki.baynote.data.model.Tag
 import com.yuki.baynote.ui.screen.components.FolderDrawerContent
 import com.yuki.baynote.ui.screen.components.MoveToFolderDialog
 import com.yuki.baynote.ui.screen.components.NoteCard
-import com.yuki.baynote.ui.theme.AppTheme
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,8 +59,7 @@ fun NoteListScreen(
     onFolderClick: (Long) -> Unit,
     onNavigateBack: (() -> Unit)? = null,
     onAllNotesClick: (() -> Unit)? = null,
-    currentTheme: AppTheme = AppTheme.DEFAULT,
-    onThemeChange: (AppTheme) -> Unit = {}
+    onSettingsClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isHome = onNavigateBack == null
@@ -78,9 +81,7 @@ fun NoteListScreen(
                     )
                 } else {
                     TopAppBar(
-                        title = {
-                            Text(uiState.currentFolder?.name ?: "Baynote")
-                        },
+                        title = { Text(uiState.currentFolder?.name ?: "Baynote") },
                         navigationIcon = {
                             if (isHome) {
                                 val drawerState = LocalDrawerState.current
@@ -103,24 +104,51 @@ fun NoteListScreen(
                 }
             },
             floatingActionButton = {
-                FloatingActionButton(
-                    onClick = onCreateNote,
-                    shape = CircleShape
-                ) {
+                FloatingActionButton(onClick = onCreateNote, shape = CircleShape) {
                     Icon(Icons.Filled.Add, contentDescription = "New note")
                 }
             }
         ) { innerPadding ->
-            NoteListContent(
-                notes = uiState.notes,
-                allFolders = uiState.allFolders,
-                onNoteClick = onNoteClick,
-                onPinToggle = { viewModel.togglePin(it.note) },
-                onDelete = { viewModel.deleteNote(it.note) },
-                onMoveToFolder = { noteToMove = it },
-                emptyMessage = if (uiState.searchQuery.isNotBlank()) "No results" else if (isHome) "No notes yet" else "This folder is empty",
-                modifier = Modifier.padding(innerPadding)
-            )
+            Column(modifier = Modifier.padding(innerPadding)) {
+                // Label filter chips
+                if (uiState.allTags.isNotEmpty()) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(uiState.allTags, key = { it.id }) { tag ->
+                            FilterChip(
+                                selected = uiState.selectedTagId == tag.id,
+                                onClick = {
+                                    viewModel.selectTag(
+                                        if (uiState.selectedTagId == tag.id) null else tag.id
+                                    )
+                                },
+                                label = { Text(tag.name) }
+                            )
+                        }
+                    }
+                }
+
+                NoteListContent(
+                    notes = uiState.notes,
+                    allFolders = uiState.allFolders,
+                    allTags = uiState.allTags,
+                    onNoteClick = onNoteClick,
+                    onPinToggle = { viewModel.togglePin(it.note) },
+                    onDelete = { viewModel.deleteNote(it.note) },
+                    onMoveToFolder = { noteToMove = it },
+                    onLabelToggle = { note, tag, add ->
+                        if (add) viewModel.addTagToNote(note, tag)
+                        else viewModel.removeTagFromNote(note, tag)
+                    },
+                    emptyMessage = if (uiState.searchQuery.isNotBlank()) "No results"
+                                   else if (uiState.selectedTagId != null) "No notes with this label"
+                                   else if (isHome) "No notes yet"
+                                   else "This folder is empty",
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
         noteToMove?.let { nwt ->
@@ -145,6 +173,7 @@ fun NoteListScreen(
             drawerContent = {
                 FolderDrawerContent(
                     folders = uiState.folders,
+                    labels = uiState.allTags,
                     onAllNotesClick = {
                         scope.launch { drawerState.close() }
                         onAllNotesClick?.invoke()
@@ -155,8 +184,12 @@ fun NoteListScreen(
                     },
                     onCreateFolder = viewModel::createFolder,
                     onDeleteFolder = viewModel::deleteFolder,
-                    currentTheme = currentTheme,
-                    onThemeChange = onThemeChange
+                    onCreateLabel = viewModel::createLabel,
+                    onDeleteLabel = viewModel::deleteLabel,
+                    onSettingsClick = {
+                        scope.launch { drawerState.close() }
+                        onSettingsClick()
+                    }
                 )
             }
         ) {
@@ -205,15 +238,17 @@ private fun SearchTopBar(
 private fun NoteListContent(
     notes: List<NoteWithTags>,
     allFolders: List<Folder>,
+    allTags: List<Tag>,
     onNoteClick: (Long) -> Unit,
     onPinToggle: (NoteWithTags) -> Unit,
     onDelete: (NoteWithTags) -> Unit,
     onMoveToFolder: (NoteWithTags) -> Unit,
+    onLabelToggle: (com.yuki.baynote.data.model.Note, Tag, Boolean) -> Unit,
     emptyMessage: String,
     modifier: Modifier = Modifier
 ) {
     if (notes.isEmpty()) {
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Text(
                 text = emptyMessage,
                 style = MaterialTheme.typography.bodyLarge,
@@ -227,7 +262,7 @@ private fun NoteListContent(
     val others = notes.filter { !it.note.isPinned }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier,
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -247,6 +282,8 @@ private fun NoteListContent(
                     onPinToggle = { onPinToggle(noteWithTags) },
                     onDelete = { onDelete(noteWithTags) },
                     onMoveToFolder = { onMoveToFolder(noteWithTags) },
+                    onLabelToggle = { tag, add -> onLabelToggle(noteWithTags.note, tag, add) },
+                    allTags = allTags,
                     folderName = noteWithTags.note.folderId?.let { folderId ->
                         allFolders.find { it.id == folderId }?.name
                     }
@@ -272,6 +309,8 @@ private fun NoteListContent(
                 onPinToggle = { onPinToggle(noteWithTags) },
                 onDelete = { onDelete(noteWithTags) },
                 onMoveToFolder = { onMoveToFolder(noteWithTags) },
+                onLabelToggle = { tag, add -> onLabelToggle(noteWithTags.note, tag, add) },
+                allTags = allTags,
                 folderName = noteWithTags.note.folderId?.let { folderId ->
                     allFolders.find { it.id == folderId }?.name
                 }

@@ -14,16 +14,24 @@ import com.yuki.baynote.ui.screen.noteedit.NoteEditScreen
 import com.yuki.baynote.ui.screen.noteedit.NoteEditViewModel
 import com.yuki.baynote.ui.screen.notelist.NoteListScreen
 import com.yuki.baynote.ui.screen.notelist.NoteListViewModel
+import com.yuki.baynote.ui.screen.settings.SettingsScreen
+import com.yuki.baynote.ui.screen.themecreator.ThemeCreatorScreen
 import com.yuki.baynote.ui.theme.AppTheme
+import com.yuki.baynote.ui.theme.CustomThemeColors
+import com.yuki.baynote.ui.theme.DarkModePreference
 
 object BaynoteRoutes {
     const val NOTE_LIST = "notes"
     const val NOTE_EDIT = "note/{noteId}?folderId={folderId}"
     const val FOLDER_VIEW = "folder/{folderId}"
+    const val SETTINGS = "settings"
+    const val THEME_CREATOR = "theme_creator"
+    const val THEME_CREATOR_EDIT = "theme_creator/{editIndex}"
 
     fun noteEdit(noteId: Long, folderId: Long? = null) =
         if (folderId != null) "note/$noteId?folderId=$folderId" else "note/$noteId"
     fun folderView(folderId: Long) = "folder/$folderId"
+    fun themeCreatorEdit(index: Int) = "theme_creator/$index"
 }
 
 @Composable
@@ -31,7 +39,18 @@ fun BaynoteNavGraph(
     navController: NavHostController,
     application: Application,
     currentTheme: AppTheme,
-    onThemeChange: (AppTheme) -> Unit
+    onThemeChange: (AppTheme) -> Unit,
+    darkMode: DarkModePreference,
+    onDarkModeChange: (DarkModePreference) -> Unit,
+    fontSize: Int,
+    onFontSizeChange: (Int) -> Unit,
+    headingMargin: Int,
+    onHeadingMarginChange: (Int) -> Unit,
+    customColors: CustomThemeColors?,
+    savedThemes: List<CustomThemeColors>,
+    onCustomThemeSave: (CustomThemeColors, Int?) -> Unit,
+    onSavedThemeSelect: (CustomThemeColors) -> Unit,
+    onSavedThemeDelete: (Int) -> Unit
 ) {
     NavHost(
         navController = navController,
@@ -51,9 +70,8 @@ fun BaynoteNavGraph(
                 onNoteClick = { noteId -> navController.navigate(BaynoteRoutes.noteEdit(noteId)) },
                 onCreateNote = { navController.navigate(BaynoteRoutes.noteEdit(0L)) },
                 onFolderClick = { folderId -> navController.navigate(BaynoteRoutes.folderView(folderId)) },
-                onAllNotesClick = { /* Already on home, do nothing */ },
-                currentTheme = currentTheme,
-                onThemeChange = onThemeChange
+                onAllNotesClick = { /* Already on home */ },
+                onSettingsClick = { navController.navigate(BaynoteRoutes.SETTINGS) }
             )
         }
 
@@ -74,7 +92,8 @@ fun BaynoteNavGraph(
             )
             NoteEditScreen(
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                fontSize = fontSize
             )
         }
 
@@ -95,8 +114,55 @@ fun BaynoteNavGraph(
                 onAllNotesClick = {
                     navController.popBackStack(BaynoteRoutes.NOTE_LIST, inclusive = false)
                 },
+                onSettingsClick = { navController.navigate(BaynoteRoutes.SETTINGS) }
+            )
+        }
+
+        composable(BaynoteRoutes.SETTINGS) {
+            SettingsScreen(
                 currentTheme = currentTheme,
-                onThemeChange = onThemeChange
+                onThemeChange = onThemeChange,
+                darkMode = darkMode,
+                onDarkModeChange = onDarkModeChange,
+                fontSize = fontSize,
+                onFontSizeChange = onFontSizeChange,
+                headingMargin = headingMargin,
+                onHeadingMarginChange = onHeadingMarginChange,
+                customColors = customColors,
+                savedThemes = savedThemes,
+                onThemeCreatorClick = { navController.navigate(BaynoteRoutes.THEME_CREATOR) },
+                onSavedThemeSelect = onSavedThemeSelect,
+                onSavedThemeEdit = { index -> navController.navigate(BaynoteRoutes.themeCreatorEdit(index)) },
+                onSavedThemeDelete = onSavedThemeDelete,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Create new theme
+        composable(BaynoteRoutes.THEME_CREATOR) {
+            ThemeCreatorScreen(
+                initialColors = null,
+                onSave = { colors ->
+                    onCustomThemeSave(colors, null)
+                    navController.popBackStack()
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Edit existing saved theme
+        composable(
+            route = BaynoteRoutes.THEME_CREATOR_EDIT,
+            arguments = listOf(navArgument("editIndex") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val editIndex = backStackEntry.arguments!!.getInt("editIndex")
+            ThemeCreatorScreen(
+                initialColors = savedThemes.getOrNull(editIndex),
+                onSave = { colors ->
+                    onCustomThemeSave(colors, editIndex)
+                    navController.popBackStack()
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,15 +48,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.yuki.baynote.ui.screen.components.LabelPickerDialog
 import com.yuki.baynote.ui.screen.noteedit.markdown.ContentSegment
 import com.yuki.baynote.ui.screen.noteedit.markdown.ContentSegmentParser
 import com.yuki.baynote.ui.screen.noteedit.markdown.FormattingAction
@@ -67,10 +74,13 @@ private data class IndexedSegment(val id: Int, val segment: ContentSegment)
 @Composable
 fun NoteEditScreen(
     viewModel: NoteEditViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    fontSize: Int = 16
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val allTags by viewModel.allTags.collectAsState()
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showLabelDialog by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
     val segments = remember { mutableStateListOf<IndexedSegment>() }
@@ -113,16 +123,41 @@ fun NoteEditScreen(
         undoManager.pushState(content)
     }
 
+    // Updates segment content without clearing — preserves TextField composable identity so
+    // focus and keyboard stay open. Falls back to a full rebuild only if the segment count
+    // or types change (e.g. a table was inserted/removed).
+    fun restoreSegments(content: String) {
+        val parsed = ContentSegmentParser.parseSegments(content)
+
+        val sameStructure = parsed.size == segments.size &&
+            parsed.zip(segments).all { (new, old) -> new::class == old.segment::class }
+
+        if (sameStructure) {
+            parsed.forEachIndexed { i, newSeg ->
+                val id = segments[i].id
+                segments[i] = segments[i].copy(segment = newSeg)
+                if (newSeg is ContentSegment.Text) {
+                    val prevCursor = textFieldValues[id]?.selection?.start ?: newSeg.text.length
+                    val clampedCursor = prevCursor.coerceAtMost(newSeg.text.length)
+                    textFieldValues[id] = TextFieldValue(newSeg.text, TextRange(clampedCursor))
+                }
+            }
+        } else {
+            loadContentIntoSegments(content)
+        }
+        lastSyncedContent = content
+    }
+
     fun performUndo() {
         pushUndoState() // save current state so redo can restore it
         val restored = undoManager.undo() ?: return
-        loadContentIntoSegments(restored)
+        restoreSegments(restored)
         viewModel.onContentChange(restored)
     }
 
     fun performRedo() {
         val restored = undoManager.redo() ?: return
-        loadContentIntoSegments(restored)
+        restoreSegments(restored)
         viewModel.onContentChange(restored)
     }
 
@@ -184,6 +219,14 @@ fun NoteEditScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showLabelDialog = true }) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.Label,
+                            contentDescription = "Labels",
+                            tint = if (uiState.tags.isNotEmpty()) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconButton(onClick = { viewModel.togglePin() }) {
                         Icon(
                             if (uiState.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
@@ -227,13 +270,9 @@ fun NoteEditScreen(
                                         textFieldValues[segId] ?: TextFieldValue(seg.text)
                                     )
                                 }
-
-                                // Sync external changes into local fieldValue
-                                LaunchedEffect(seg.text) {
-                                    if (seg.text != fieldValue.text) {
-                                        fieldValue = TextFieldValue(seg.text, TextRange(seg.text.length))
-                                        textFieldValues[segId] = fieldValue
-                                    }
+                                if (seg.text != fieldValue.text) {
+                                    val incoming = textFieldValues[segId]
+                                    fieldValue = incoming ?: TextFieldValue(seg.text, TextRange(seg.text.length))
                                 }
 
                                 val isLast = index == segments.lastIndex
@@ -243,23 +282,32 @@ fun NoteEditScreen(
                                     onValueChange = { newVal ->
                                         val oldText = fieldValue.text
                                         val newText = newVal.text
-                                        // Push undo at word boundaries before applying change
-                                        val shouldPush = when {
-                                            newText.length > oldText.length + 1 -> true // paste
-                                            newText.length == oldText.length + 1 -> {
-                                                val pos = newVal.selection.start - 1
-                                                pos >= 0 && newText[pos].let { it == ' ' || it == '\n' }
-                                            }
-                                            else -> false
+
+                                        val isBackspace = newText.length == oldText.length - 1 &&
+                                            newVal.selection.collapsed &&
+                                            newVal.selection.start <= oldText.length - 1 &&
+                                            oldText.removeRange(newVal.selection.start, newVal.selection.start + 1) == newText
+
+                                        val isEnter = newText.length == oldText.length + 1 &&
+                                            newVal.selection.collapsed &&
+                                            newVal.selection.start > 0 &&
+                                            newText[newVal.selection.start - 1] == '\n'
+
+                                        val resolvedVal = when {
+                                            isBackspace -> FormattingAction.smartBackspace(fieldValue) ?: newVal
+                                            isEnter -> FormattingAction.smartEnter(newVal) ?: newVal
+                                            else -> newVal
                                         }
+
+                                        val shouldPush = resolvedVal.text.length > oldText.length
                                         if (shouldPush) pushUndoState()
 
-                                        fieldValue = newVal
-                                        textFieldValues[segId] = newVal
+                                        fieldValue = resolvedVal
+                                        textFieldValues[segId] = resolvedVal
                                         val idx = segments.indexOfFirst { it.id == segId }
                                         if (idx >= 0) {
                                             segments[idx] = segments[idx].copy(
-                                                segment = ContentSegment.Text(newVal.text)
+                                                segment = ContentSegment.Text(resolvedVal.text)
                                             )
                                             syncToViewModel()
                                         }
@@ -270,7 +318,7 @@ fun NoteEditScreen(
                                         }) {
                                         { Text("Start writing...") }
                                     } else null,
-                                    textStyle = MaterialTheme.typography.bodyLarge,
+                                    textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
                                     visualTransformation = markdownTransformation,
                                     colors = transparentTextFieldColors(),
                                     modifier = Modifier
@@ -282,6 +330,40 @@ fun NoteEditScreen(
                                         .let {
                                             if (isLast) it.defaultMinSize(minHeight = 200.dp)
                                             else it
+                                        }
+                                        .pointerInput(segId) {
+                                            val doubleTapTimeout = viewConfiguration.doubleTapTimeoutMillis
+                                            val doubleTapSlop = viewConfiguration.touchSlop * 8
+                                            var lastDownTime = 0L
+                                            var lastDownPosition = Offset.Zero
+
+                                            awaitEachGesture {
+                                                val down = awaitFirstDown(requireUnconsumed = false)
+                                                val downTime = System.currentTimeMillis()
+                                                val elapsed = downTime - lastDownTime
+                                                val dist = (down.position - lastDownPosition).getDistance()
+
+                                                if (elapsed < doubleTapTimeout && dist < doubleTapSlop) {
+                                                    val currentValue = textFieldValues[segId]
+                                                    if (currentValue != null) {
+                                                        val range = findWordBoundaries(
+                                                            currentValue.text,
+                                                            currentValue.selection.start
+                                                        )
+                                                        if (range != null) {
+                                                            val newValue = currentValue.copy(
+                                                                selection = TextRange(range.first, range.second)
+                                                            )
+                                                            fieldValue = newValue
+                                                            textFieldValues[segId] = newValue
+                                                        }
+                                                    }
+                                                    lastDownTime = 0L
+                                                } else {
+                                                    lastDownTime = downTime
+                                                    lastDownPosition = down.position
+                                                }
+                                            }
                                         }
                                 )
                             }
@@ -444,6 +526,19 @@ fun NoteEditScreen(
         )
     }
 
+    if (showLabelDialog) {
+        LabelPickerDialog(
+            allTags = allTags,
+            noteTags = uiState.tags,
+            onToggle = { tag, add ->
+                if (add) viewModel.addTag(tag)
+                else viewModel.removeTag(tag)
+            },
+            onDismiss = { showLabelDialog = false },
+            onCreateLabel = viewModel::createAndAddTag
+        )
+    }
+
     LaunchedEffect(uiState.isNew) {
         if (uiState.isNew) {
             focusRequester.requestFocus()
@@ -476,6 +571,17 @@ private fun mergeAdjacentTextSegments(
             i++
         }
     }
+}
+
+private fun findWordBoundaries(text: String, offset: Int): Pair<Int, Int>? {
+    if (text.isEmpty()) return null
+    val pos = offset.coerceIn(0, (text.length - 1).coerceAtLeast(0))
+    if (text[pos].isWhitespace()) return null
+    var start = pos
+    while (start > 0 && !text[start - 1].isWhitespace()) start--
+    var end = pos + 1
+    while (end < text.length && !text[end].isWhitespace()) end++
+    return Pair(start, end)
 }
 
 @Composable
