@@ -3,10 +3,12 @@ package com.yuki.baynote.ui.screen.noteedit
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,7 +79,7 @@ import com.yuki.baynote.ui.screen.noteedit.markdown.MathAnnotationTransformation
 
 private data class IndexedSegment(val id: Int, val segment: ContentSegment)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun NoteEditScreen(
     viewModel: NoteEditViewModel,
@@ -290,6 +292,12 @@ fun NoteEditScreen(
 
                                 val isLast = index == segments.lastIndex
                                 val bringIntoViewRequester = remember { BringIntoViewRequester() }
+                                val imeVisible = WindowInsets.isImeVisible
+                                LaunchedEffect(imeVisible) {
+                                    if (imeVisible && focusedSegId == segId) {
+                                        bringIntoViewRequester.bringIntoView()
+                                    }
+                                }
 
                                 TextField(
                                     value = fieldValue,
@@ -357,7 +365,6 @@ fun NoteEditScreen(
                                             if (state.isFocused) {
                                                 focusedSegId = segId
                                                 coroutineScope.launch {
-                                                    delay(300)
                                                     bringIntoViewRequester.bringIntoView()
                                                 }
                                             }
