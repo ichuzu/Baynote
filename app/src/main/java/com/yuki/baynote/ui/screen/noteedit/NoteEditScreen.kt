@@ -267,18 +267,18 @@ fun NoteEditScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
-                .imePadding()
         ) {
-            // Content segments
+            // Scrollable content — bottom padding reserves space for the pinned toolbar
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxSize()
                     .verticalScroll(scrollState)
+                    .padding(bottom = 84.dp)  // toolbar(48) + undo(36)
             ) {
                 segments.forEachIndexed { index, indexedSeg ->
                     key(indexedSeg.id) {
@@ -442,6 +442,14 @@ fun NoteEditScreen(
                 }
             }
 
+            // Toolbar pinned to bottom, lifts above keyboard via imePadding
+            Column(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .imePadding()
+            ) {
+
             // Undo / Redo
             Row(
                 modifier = Modifier
@@ -551,8 +559,10 @@ fun NoteEditScreen(
                     }
                 }
             )
-            }
-        }
+            } // end formatting toolbar if/else
+
+            } // end bottom-pinned Column
+        } // end Box
     }
 
     if (showDeleteDialog) {
