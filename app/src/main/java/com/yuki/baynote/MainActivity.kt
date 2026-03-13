@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
                 DarkModePreference.DARK  -> true
                 DarkModePreference.LIGHT -> false
             }
-            BaynoteTheme(appTheme = currentTheme, customColors = customColors, darkTheme = isDark) {
+            BaynoteTheme(appTheme = currentTheme, customColors = customColors, darkTheme = isDark, dynamicColor = false) {
                 val navController = rememberNavController()
                 BaynoteNavGraph(
                     navController = navController,

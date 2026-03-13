@@ -52,10 +52,10 @@ jobs:
       - name: Rename APK
         run: |
           mv app/build/outputs/apk/release/app-release.apk \
-             app/build/outputs/apk/release/Baynote-${{ steps.tag.outputs.name }}.apk
+             app/build/outputs/apk/release/EnNote-${{ steps.tag.outputs.name }}.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ steps.tag.outputs.name }}
-          files: app/build/outputs/apk/release/Baynote-${{ steps.tag.outputs.name }}.apk
+          files: app/build/outputs/apk/release/EnNote-${{ steps.tag.outputs.name }}.apk

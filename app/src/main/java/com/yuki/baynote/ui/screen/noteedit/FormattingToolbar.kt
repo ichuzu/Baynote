@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 enum class FormattingOption {
-    H1, H2, H3, Bold, Italic, Table
+    H1, H2, H3, Bold, Italic, Table, Equals
 }
 
 @Composable
@@ -65,6 +65,12 @@ fun FormattingToolbar(
 
             IconButton(onClick = { onFormat(FormattingOption.Table) }) {
                 Icon(Icons.Filled.TableChart, contentDescription = "Insert table")
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            IconButton(onClick = { onFormat(FormattingOption.Equals) }) {
+                Text("=", fontSize = 18.sp, fontWeight = FontWeight.Normal)
             }
         }
     }

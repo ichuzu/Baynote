@@ -67,6 +67,7 @@ import com.yuki.baynote.ui.screen.noteedit.markdown.ContentSegment
 import com.yuki.baynote.ui.screen.noteedit.markdown.ContentSegmentParser
 import com.yuki.baynote.ui.screen.noteedit.markdown.FormattingAction
 import com.yuki.baynote.ui.screen.noteedit.markdown.MarkdownVisualTransformation
+import com.yuki.baynote.ui.screen.noteedit.markdown.MathAnnotationTransformation
 
 private data class IndexedSegment(val id: Int, val segment: ContentSegment)
 
@@ -170,7 +171,10 @@ fun NoteEditScreen(
         }
     }
 
-    val markdownTransformation = remember { MarkdownVisualTransformation() }
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val mathTransformation = remember(primaryColor) {
+        MathAnnotationTransformation(MarkdownVisualTransformation(), primaryColor)
+    }
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
 
     LaunchedEffect(uiState.isSaved, uiState.isDeleted) {
@@ -297,7 +301,21 @@ fun NoteEditScreen(
 
                                         val resolvedVal = when {
                                             isBackspace -> FormattingAction.smartBackspace(fieldValue) ?: newVal
-                                            isEnter -> FormattingAction.smartEnter(newVal) ?: newVal
+                                            isEnter -> {
+                                                // Check if line before newline ends with '=' and has a valid math result
+                                                val newlinePos = newVal.selection.start - 1
+                                                val lineStart = newVal.text.lastIndexOf('\n', newlinePos - 1) + 1
+                                                val line = newVal.text.substring(lineStart, newlinePos).trimEnd()
+                                                if (line.endsWith("=")) {
+                                                    val expr = line.dropLast(1).replace(",", "").replace(" ", "").trim()
+                                                    val mathResult = if (expr.isNotEmpty()) FormulaEvaluator.evaluate("=$expr", emptyList()) else null
+                                                    if (mathResult != null) {
+                                                        val formatted = FormulaEvaluator.formatResult(mathResult)
+                                                        val newStr = newVal.text.substring(0, newlinePos) + formatted + newVal.text.substring(newlinePos)
+                                                        TextFieldValue(newStr, TextRange(newlinePos + formatted.length + 1))
+                                                    } else FormattingAction.smartEnter(newVal) ?: newVal
+                                                } else FormattingAction.smartEnter(newVal) ?: newVal
+                                            }
                                             else -> newVal
                                         }
 
@@ -321,13 +339,15 @@ fun NoteEditScreen(
                                         { Text("Start writing...") }
                                     } else null,
                                     textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
-                                    visualTransformation = markdownTransformation,
+                                    visualTransformation = mathTransformation,
                                     colors = transparentTextFieldColors(),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp)
                                         .onFocusChanged { state ->
-                                            if (state.isFocused) focusedSegId = segId
+                                            if (state.isFocused) {
+                                                focusedSegId = segId
+                                            }
                                         }
                                         .let {
                                             if (isLast) it.defaultMinSize(minHeight = 200.dp)
@@ -456,6 +476,11 @@ fun NoteEditScreen(
                 onFormat = { option ->
                     pushUndoState()
                     when (option) {
+                        FormattingOption.Equals -> {
+                            // Insert "=" into the focused table cell to start a formula
+                            formulaInsertFn?.invoke("=")
+                        }
+
                         FormattingOption.Table -> {
                             val focusIdx = segments.indexOfFirst { it.id == focusedSegId }
                             val idx = if (focusIdx >= 0) focusIdx else segments.lastIndex

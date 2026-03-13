@@ -67,6 +67,14 @@ fun TableEditor(
     var focusCellRequest by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var focusedCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var insertIntoCellRequest by remember { mutableStateOf<Triple<Int, Int, String>?>(null) }
+    var acceptCellRequest by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    // Returns true if the formula expression ends with an operator (needs more input)
+    fun formulaEndsWithOperator(formula: String): Boolean {
+        val expr = formula.removePrefix("=").trimEnd()
+        if (expr.isEmpty()) return true
+        return expr.last() in setOf('+', '-', '*', '/', '(')
+    }
 
     fun updateCell(rowIndex: Int, colIndex: Int, value: String) {
         val newRows = rows.map { it.toMutableList() }.toMutableList()
@@ -77,13 +85,14 @@ fun TableEditor(
         onRowsChange(newRows)
     }
 
-    // Notify parent when formula mode changes
+    // Notify parent when formula mode changes.
+    // insertFn is provided whenever ANY cell is focused so the = button can insert into non-formula cells too.
     LaunchedEffect(focusedCell, rows) {
         val fc = focusedCell
         val isFocusedFormula = fc?.let { (r, c) ->
             rows.getOrNull(r)?.getOrNull(c)?.startsWith("=")
         } == true
-        val insertFn: ((String) -> Unit)? = if (fc != null && isFocusedFormula) {
+        val insertFn: ((String) -> Unit)? = if (fc != null) {
             { text -> insertIntoCellRequest = Triple(fc.first, fc.second, text) }
         } else null
         onFormulaModeChange?.invoke(isFocusedFormula, insertFn)
@@ -149,14 +158,41 @@ fun TableEditor(
                                 LaunchedEffect(insertIntoCellRequest) {
                                     val req = insertIntoCellRequest
                                     if (req != null && req.first == rowIndex && req.second == colIndex) {
+                                        insertIntoCellRequest = null
+                                        val insertText = req.third
+                                        // Space inserted into a formula cell → accept the formula result
+                                        if (cellTfv.text.startsWith("=") && insertText == " ") {
+                                            val result = FormulaEvaluator.evaluate(cellTfv.text, rows)
+                                            if (result != null) {
+                                                val formatted = FormulaEvaluator.formatResult(result)
+                                                cellTfv = TextFieldValue(formatted, TextRange(formatted.length))
+                                                updateCell(rowIndex, colIndex, formatted)
+                                                return@LaunchedEffect
+                                            }
+                                        }
                                         val cursorPos = cellTfv.selection.end
                                         val newText = cellTfv.text.substring(0, cursorPos) +
-                                            req.third +
+                                            insertText +
                                             cellTfv.text.substring(cursorPos)
-                                        val newPos = cursorPos + req.third.length
+                                        val newPos = cursorPos + insertText.length
                                         cellTfv = TextFieldValue(newText, TextRange(newPos))
                                         updateCell(rowIndex, colIndex, newText)
-                                        insertIntoCellRequest = null
+                                    }
+                                }
+
+                                // Accept formula when tapping away to a non-operator position
+                                LaunchedEffect(acceptCellRequest) {
+                                    val req = acceptCellRequest
+                                    if (req != null && req.first == rowIndex && req.second == colIndex) {
+                                        acceptCellRequest = null
+                                        if (cellTfv.text.startsWith("=")) {
+                                            val result = FormulaEvaluator.evaluate(cellTfv.text, rows)
+                                            if (result != null) {
+                                                val formatted = FormulaEvaluator.formatResult(result)
+                                                cellTfv = TextFieldValue(formatted, TextRange(formatted.length))
+                                                updateCell(rowIndex, colIndex, formatted)
+                                            }
+                                        }
                                     }
                                 }
 
@@ -169,18 +205,38 @@ fun TableEditor(
                                         onValueChange = { newTfv ->
                                             if ('\n' in newTfv.text) {
                                                 val cleaned = newTfv.text.replace("\n", "")
-                                                cellTfv = TextFieldValue(cleaned, TextRange(cleaned.length))
-                                                enterCount++
-                                                if (enterCount >= 2) {
-                                                    onUndoCheckpoint()
-                                                    val newRows = rows.toMutableList()
-                                                    newRows.add(rowIndex + 1, List(colCount) { "" })
-                                                    focusCellRequest = Pair(rowIndex + 1, 0)
-                                                    onRowsChange(newRows)
-                                                    enterCount = 0
-                                                }
-                                                if (cleaned != cellValue) {
-                                                    updateCell(rowIndex, colIndex, cleaned)
+                                                if (cellTfv.text.startsWith("=")) {
+                                                    // Formula cell: Enter accepts formula and moves to cell below
+                                                    val result = FormulaEvaluator.evaluate(cellTfv.text, rows)
+                                                    if (result != null) {
+                                                        val formatted = FormulaEvaluator.formatResult(result)
+                                                        cellTfv = TextFieldValue(formatted, TextRange(formatted.length))
+                                                        updateCell(rowIndex, colIndex, formatted)
+                                                    } else {
+                                                        cellTfv = TextFieldValue(cleaned, TextRange(cleaned.length))
+                                                        if (cleaned != cellValue) updateCell(rowIndex, colIndex, cleaned)
+                                                    }
+                                                    if (rowIndex + 1 < rows.size) {
+                                                        focusCellRequest = Pair(rowIndex + 1, colIndex)
+                                                    } else {
+                                                        onUndoCheckpoint()
+                                                        focusCellRequest = Pair(rowIndex + 1, colIndex)
+                                                        onRowsChange(rows + listOf(List(colCount) { "" }))
+                                                    }
+                                                } else {
+                                                    cellTfv = TextFieldValue(cleaned, TextRange(cleaned.length))
+                                                    enterCount++
+                                                    if (enterCount >= 2) {
+                                                        onUndoCheckpoint()
+                                                        val newRows = rows.toMutableList()
+                                                        newRows.add(rowIndex + 1, List(colCount) { "" })
+                                                        focusCellRequest = Pair(rowIndex + 1, 0)
+                                                        onRowsChange(newRows)
+                                                        enterCount = 0
+                                                    }
+                                                    if (cleaned != cellValue) {
+                                                        updateCell(rowIndex, colIndex, cleaned)
+                                                    }
                                                 }
                                             } else {
                                                 val oldText = cellTfv.text
@@ -281,15 +337,13 @@ fun TableEditor(
                                                 }
                                                 if (cellTfv.text.startsWith("=")) {
                                                     val formulaResult = FormulaEvaluator.evaluate(cellTfv.text, rows)
-                                                    Text(
-                                                        text = if (formulaResult != null)
-                                                            "= ${FormulaEvaluator.formatResult(formulaResult)}"
-                                                        else "ERR",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = if (formulaResult != null)
-                                                            MaterialTheme.colorScheme.primary
-                                                        else MaterialTheme.colorScheme.error
-                                                    )
+                                                    if (formulaResult != null) {
+                                                        Text(
+                                                            text = "= ${FormulaEvaluator.formatResult(formulaResult)}",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -304,10 +358,16 @@ fun TableEditor(
                                             modifier = Modifier
                                                 .matchParentSize()
                                                 .clickable {
-                                                    val ref = FormulaEvaluator.buildCellRef(rowIndex, colIndex)
-                                                    val fc = focusedCell
-                                                    if (fc != null) {
+                                                    val fc = focusedCell ?: return@clickable
+                                                    val formulaText = rows.getOrNull(fc.first)?.getOrNull(fc.second) ?: ""
+                                                    if (formulaEndsWithOperator(formulaText)) {
+                                                        // Formula needs more input → insert cell reference
+                                                        val ref = FormulaEvaluator.buildCellRef(rowIndex, colIndex)
                                                         insertIntoCellRequest = Triple(fc.first, fc.second, ref)
+                                                    } else {
+                                                        // Formula is complete → accept it and move focus here
+                                                        acceptCellRequest = Pair(fc.first, fc.second)
+                                                        focusCellRequest = Pair(rowIndex, colIndex)
                                                     }
                                                 }
                                         )
