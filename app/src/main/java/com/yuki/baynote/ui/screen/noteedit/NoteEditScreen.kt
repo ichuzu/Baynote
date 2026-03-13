@@ -1,7 +1,6 @@
 package com.yuki.baynote.ui.screen.noteedit
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -9,8 +8,6 @@ import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.material3.ScaffoldDefaults
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -81,7 +78,7 @@ import com.yuki.baynote.ui.screen.noteedit.markdown.MathAnnotationTransformation
 
 private data class IndexedSegment(val id: Int, val segment: ContentSegment)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NoteEditScreen(
     viewModel: NoteEditViewModel,
@@ -100,11 +97,11 @@ fun NoteEditScreen(
     var lastSyncedContent by remember { mutableStateOf<String?>(null) }
     var focusedSegId by remember { mutableIntStateOf(-1) }
 
-    val bringIntoViewRequesters = remember { mutableStateMapOf<Int, BringIntoViewRequester>() }
+    val scrollState = rememberScrollState()
     val imeVisible = WindowInsets.isImeVisible
-    LaunchedEffect(imeVisible, focusedSegId) {
-        if (imeVisible && focusedSegId >= 0) {
-            bringIntoViewRequesters[focusedSegId]?.bringIntoView()
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) {
+            scrollState.animateScrollTo(scrollState.maxValue)
         }
     }
     val undoManager = remember { UndoRedoManager() }
@@ -283,7 +280,7 @@ fun NoteEditScreen(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
             ) {
                 segments.forEachIndexed { index, indexedSeg ->
                     key(indexedSeg.id) {
@@ -301,10 +298,6 @@ fun NoteEditScreen(
                                 }
 
                                 val isLast = index == segments.lastIndex
-                                val bringIntoViewRequester = remember { BringIntoViewRequester() }
-                                LaunchedEffect(Unit) {
-                                    bringIntoViewRequesters[segId] = bringIntoViewRequester
-                                }
 
                                 TextField(
                                     value = fieldValue,
@@ -367,7 +360,6 @@ fun NoteEditScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp)
-                                        .bringIntoViewRequester(bringIntoViewRequester)
                                         .onFocusChanged { state ->
                                             if (state.isFocused) focusedSegId = segId
                                         }
