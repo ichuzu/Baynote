@@ -5,11 +5,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -98,7 +100,13 @@ fun NoteEditScreen(
     var lastSyncedContent by remember { mutableStateOf<String?>(null) }
     var focusedSegId by remember { mutableIntStateOf(-1) }
 
-    val coroutineScope = rememberCoroutineScope()
+    val bringIntoViewRequesters = remember { mutableStateMapOf<Int, BringIntoViewRequester>() }
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible, focusedSegId) {
+        if (imeVisible && focusedSegId >= 0) {
+            bringIntoViewRequesters[focusedSegId]?.bringIntoView()
+        }
+    }
     val undoManager = remember { UndoRedoManager() }
     var isFormulaMode by remember { mutableStateOf(false) }
     var formulaInsertFn by remember { mutableStateOf<((String) -> Unit)?>(null) }
@@ -198,7 +206,7 @@ fun NoteEditScreen(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.exclude(WindowInsets.ime),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
@@ -267,7 +275,9 @@ fun NoteEditScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
                 .imePadding()
+                .navigationBarsPadding()
         ) {
             // Content segments
             Column(
@@ -292,11 +302,8 @@ fun NoteEditScreen(
 
                                 val isLast = index == segments.lastIndex
                                 val bringIntoViewRequester = remember { BringIntoViewRequester() }
-                                val imeVisible = WindowInsets.isImeVisible
-                                LaunchedEffect(imeVisible) {
-                                    if (imeVisible && focusedSegId == segId) {
-                                        bringIntoViewRequester.bringIntoView()
-                                    }
+                                LaunchedEffect(Unit) {
+                                    bringIntoViewRequesters[segId] = bringIntoViewRequester
                                 }
 
                                 TextField(
@@ -362,12 +369,7 @@ fun NoteEditScreen(
                                         .padding(horizontal = 24.dp)
                                         .bringIntoViewRequester(bringIntoViewRequester)
                                         .onFocusChanged { state ->
-                                            if (state.isFocused) {
-                                                focusedSegId = segId
-                                                coroutineScope.launch {
-                                                    bringIntoViewRequester.bringIntoView()
-                                                }
-                                            }
+                                            if (state.isFocused) focusedSegId = segId
                                         }
                                         .let {
                                             if (isLast) it.defaultMinSize(minHeight = 200.dp)
