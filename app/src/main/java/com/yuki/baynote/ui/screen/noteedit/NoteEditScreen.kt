@@ -1,7 +1,13 @@
 package com.yuki.baynote.ui.screen.noteedit
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -71,7 +77,7 @@ import com.yuki.baynote.ui.screen.noteedit.markdown.MathAnnotationTransformation
 
 private data class IndexedSegment(val id: Int, val segment: ContentSegment)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun NoteEditScreen(
     viewModel: NoteEditViewModel,
@@ -90,6 +96,7 @@ fun NoteEditScreen(
     var lastSyncedContent by remember { mutableStateOf<String?>(null) }
     var focusedSegId by remember { mutableIntStateOf(-1) }
 
+    val coroutineScope = rememberCoroutineScope()
     val undoManager = remember { UndoRedoManager() }
     var isFormulaMode by remember { mutableStateOf(false) }
     var formulaInsertFn by remember { mutableStateOf<((String) -> Unit)?>(null) }
@@ -282,6 +289,7 @@ fun NoteEditScreen(
                                 }
 
                                 val isLast = index == segments.lastIndex
+                                val bringIntoViewRequester = remember { BringIntoViewRequester() }
 
                                 TextField(
                                     value = fieldValue,
@@ -344,9 +352,14 @@ fun NoteEditScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp)
+                                        .bringIntoViewRequester(bringIntoViewRequester)
                                         .onFocusChanged { state ->
                                             if (state.isFocused) {
                                                 focusedSegId = segId
+                                                coroutineScope.launch {
+                                                    delay(300)
+                                                    bringIntoViewRequester.bringIntoView()
+                                                }
                                             }
                                         }
                                         .let {
